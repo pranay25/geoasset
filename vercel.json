@@ -2,6 +2,10 @@
   "buildCommand": "npm install && npm run build",
   "outputDirectory": "dist",
   "framework": "vite",
+  "env": {
+    "VITE_SUPABASE_URL": "https://elrdndstgsosbjgrxeqt.supabase.co",
+    "VITE_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVscmRuZHN0Z3Nvc2JqZ3J4ZXF0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA5MDE1MzIsImV4cCI6MjA5NjQ3NzUzMn0.7B-E9SbUuZGLltLbt4CMuZrNLuI_v2MD_SnvgOgf6rE"
+  },
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
   ]
