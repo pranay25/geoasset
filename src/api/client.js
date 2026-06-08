@@ -25,13 +25,20 @@ export const authApi = {
   async logout() {
     await supabase.auth.signOut()
   },
-  async getSession() {
-    const { data } = await supabase.auth.getSession()
-    return data.session
+ async getProfile(userId) {
+    const { data: profile, error: profErr } = await supabase
+      .from('profiles').select('*').eq('id', userId).single()
+    if (profErr) throw new Error(profErr.message)
+    const { data: org } = await supabase
+      .from('organisations').select('*').eq('id', profile.org_id).single()
+    let subdiv = null
+    if (profile.subdivision_id) {
+      const { data: sd } = await supabase
+        .from('subdivisions').select('code,name').eq('id', profile.subdivision_id).single()
+      subdiv = sd
+    }
+    return { ...profile, organisations: org, subdivisions: subdiv }
   },
-  async getProfile(userId) {
-    const { data, error } = await supabase
-      .from('profiles').select('*, subdivisions(code,name), organisations(id,name,circle,division,city,state,lat,lng)')
       .eq('id', userId).single()
     if (error) throw new Error(error.message)
     return data
