@@ -1,9 +1,13 @@
 import { createClient } from '@supabase/supabase-js'
 
-const SUPABASE_URL  = 'https://elrdndstgsosbjgrxeqt.supabase.co'
-const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVscmRuZHN0Z3Nvc2JqZ3J4ZXF0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA5MDE1MzIsImV4cCI6MjA5NjQ3NzUzMn0.7B-E9SbUuZGLltLbt4CMuZrNLuI_v2MD_SnvgOgf6rE'
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
+const SUPABASE_ANON = import.meta.env.VITE_SUPABASE_ANON_KEY
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON)
+if (!SUPABASE_URL || !SUPABASE_ANON) {
+  console.error('Missing Supabase env vars. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to your Vercel environment variables.')
+}
+
+export const supabase = createClient(SUPABASE_URL || '', SUPABASE_ANON || '')
 
 // ── Auth ──────────────────────────────────────────────────────
 export const authApi = {
