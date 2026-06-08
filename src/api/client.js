@@ -3,9 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 const SUPABASE_URL  = 'https://elrdndstgsosbjgrxeqt.supabase.co'
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVscmRuZHN0Z3Nvc2JqZ3J4ZXF0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA5MDE1MzIsImV4cCI6MjA5NjQ3NzUzMn0.7B-E9SbUuZGLltLbt4CMuZrNLuI_v2MD_SnvgOgf6rE'
 
-
-
-export const supabase = createClient(SUPABASE_URL || '', SUPABASE_ANON || '')
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON)
 
 // ── Auth ──────────────────────────────────────────────────────
 export const authApi = {
