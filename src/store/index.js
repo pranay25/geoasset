@@ -14,7 +14,8 @@ export const useAuthStore = create((set, get) => ({
       try {
         const profile = await authApi.getProfile(session.user.id)
         setOrgId(profile.org_id)
-        set({ user: session.user, profile, org: profile.organisations, loading: false })
+        const org = Array.isArray(profile.organisations) ? profile.organisations[0] : profile.organisations
+        set({ user: session.user, profile, org, loading: false })
       } catch {
         set({ loading: false })
       }
@@ -25,7 +26,8 @@ export const useAuthStore = create((set, get) => ({
       if (event === 'SIGNED_IN' && session) {
         const profile = await authApi.getProfile(session.user.id)
         setOrgId(profile.org_id)
-        set({ user: session.user, profile, org: profile.organisations })
+        const org = Array.isArray(profile.organisations) ? profile.organisations[0] : profile.organisations
+        set({ user: session.user, profile, org })
       }
       if (event === 'SIGNED_OUT') {
         set({ user: null, profile: null, org: null })
@@ -38,7 +40,8 @@ export const useAuthStore = create((set, get) => ({
     const profile = await authApi.getProfile(data.user.id)
     if (!profile.is_active) throw new Error('Account is deactivated')
     setOrgId(profile.org_id)
-    set({ user: data.user, profile, org: profile.organisations })
+    const org = Array.isArray(profile.organisations) ? profile.organisations[0] : profile.organisations
+    set({ user: data.user, profile, org })
     return profile
   },
 

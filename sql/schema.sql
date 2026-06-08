@@ -170,9 +170,17 @@ CREATE POLICY "org_data" ON work_orders        FOR ALL USING (org_id = my_org_id
 CREATE POLICY "org_data" ON measurement_books  FOR ALL USING (org_id = my_org_id());
 CREATE POLICY "org_data" ON outstanding_groups FOR ALL USING (org_id = my_org_id());
 
--- Allow setup: insert org even before profile exists
-CREATE POLICY "allow_setup_org" ON organisations FOR INSERT WITH CHECK (true);
-CREATE POLICY "allow_setup_profile" ON profiles  FOR INSERT WITH CHECK (true);
+-- Allow setup: insert org/profile even before email confirmed
+CREATE POLICY "allow_setup_org"     ON organisations FOR INSERT WITH CHECK (true);
+CREATE POLICY "allow_setup_profile" ON profiles      FOR INSERT WITH CHECK (true);
+CREATE POLICY "allow_setup_subdiv"  ON subdivisions  FOR INSERT WITH CHECK (true);
+
+-- Allow reading own profile always (needed right after signup)
+CREATE POLICY "read_own_profile" ON profiles FOR SELECT USING (id = auth.uid());
+
+-- Allow reading org if you have a profile in it
+CREATE POLICY "read_own_org" ON organisations FOR SELECT
+  USING (id IN (SELECT org_id FROM profiles WHERE id = auth.uid()));
 
 -- ── Sequence counters (for WO/MB/Asset numbering) ────────────
 CREATE TABLE counters (

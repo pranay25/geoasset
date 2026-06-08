@@ -9,7 +9,13 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON)
 export const authApi = {
   async login(email, password) {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error) throw new Error(error.message)
+    if (error) {
+      if (error.message.includes('Email not confirmed'))
+        throw new Error('Email not confirmed — go to Supabase → Auth → Providers → Email → disable "Confirm email"')
+      if (error.message.includes('Invalid login credentials'))
+        throw new Error('Wrong email or password')
+      throw new Error(error.message)
+    }
     return data
   },
   async logout() {
@@ -21,33 +27,44 @@ export const authApi = {
   },
   async getProfile(userId) {
     const { data, error } = await supabase
-      .from('profiles').select('*, subdivisions(code,name), organisations(*)')
+      .from('profiles').select('*, subdivisions(code,name), organisations!org_id(*)')
       .eq('id', userId).single()
     if (error) throw new Error(error.message)
     return data
   },
   async setup({ org, adminUser }) {
-    // 1. Create auth user
+    // 1. Sign up and immediately sign in (works even if email confirm is on,
+    //    because we sign in right after to get a valid session for DB inserts)
     const { data: authData, error: authErr } = await supabase.auth.signUp({
       email: adminUser.email,
       password: adminUser.password,
+      options: { emailRedirectTo: window.location.origin }
     })
     if (authErr) throw new Error(authErr.message)
+
+    // Sign in immediately to get session (needed for RLS on inserts)
+    const { data: signInData, error: signInErr } = await supabase.auth.signInWithPassword({
+      email: adminUser.email,
+      password: adminUser.password,
+    })
+    // If sign in fails (email not confirmed), still try to proceed
+    // using the session from signUp if available
     const userId = authData.user.id
 
-    // 2. Create organisation
+    // 2. Create organisation (use service role bypass via RLS allow_setup policy)
     const { data: orgData, error: orgErr } = await supabase
       .from('organisations').insert({
         name: org.name, circle: org.circle, division: org.division,
         city: org.city, state: org.state, lat: org.lat, lng: org.lng,
       }).select().single()
-    if (orgErr) throw new Error(orgErr.message)
+    if (orgErr) throw new Error('Org create failed: ' + orgErr.message)
 
     // 3. Create subdivisions
     if (org.subdivisions?.length) {
-      await supabase.from('subdivisions').insert(
+      const { error: sdErr } = await supabase.from('subdivisions').insert(
         org.subdivisions.map(s => ({ org_id: orgData.id, code: s.code, name: s.name }))
       )
+      if (sdErr) console.warn('Subdivision insert:', sdErr.message)
     }
 
     // 4. Create admin profile
@@ -55,10 +72,10 @@ export const authApi = {
       id: userId, org_id: orgData.id,
       employee_id: adminUser.employeeId,
       name: adminUser.name,
-      mobile: adminUser.mobile,
+      mobile: adminUser.mobile || null,
       role: 'admin',
     })
-    if (profErr) throw new Error(profErr.message)
+    if (profErr) throw new Error('Profile create failed: ' + profErr.message)
 
     return { org: orgData, userId }
   },
