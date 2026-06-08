@@ -4,7 +4,9 @@ import { mbApi } from '../api/client.js'
 import { STATUS_COLORS } from '../utils/constants.js'
 
 function generateMBPDF(mb, org) {
-  import('jspdf').then(({ jsPDF }) => {
+  import('jspdf').then((mod) => {
+    try {
+    const jsPDF = mod.jsPDF || mod.default?.jsPDF || mod.default
     const doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' })
     const W = 210, M = 15
     // Header
@@ -54,6 +56,7 @@ function generateMBPDF(mb, org) {
     doc.setFontSize(7); doc.setTextColor(150,150,150)
     doc.text(`GeoAsset · ${mb.mb_number} · ${new Date().toLocaleDateString('en-IN')}`, W/2, 285, {align:'center'})
     doc.save(`${mb.mb_number}_MB.pdf`)
+    } catch(e) { console.error('PDF error:', e) }
   })
 }
 
@@ -100,7 +103,7 @@ export default function MeasurementBooksPage() {
     if (!form.title) return toast('Title required','err')
     setSaving(true)
     try {
-      const mb = await mbApi.create({ ...form, prepared_by_id:profile?.id })
+      const mb = await mbApi.create({ ...form, wo_id:form.wo_id||null, feeder_id:form.feeder_id||null, prepared_by_id:profile?.id })
       add(mb)
       toast(`✅ ${mb.mb_number} created`,'ok')
       setShowForm(false)

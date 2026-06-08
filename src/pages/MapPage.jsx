@@ -5,6 +5,7 @@ import { ASSET_TYPES, fmtOut, outColor } from '../utils/constants.js'
 export default function MapPage() {
   const mapRef = useRef(null)
   const lmapRef = useRef(null)
+  const leafletRef = useRef(null)  // stores L after first import
   const markersRef = useRef({})
   const groupLayersRef = useRef({})
 
@@ -24,6 +25,7 @@ export default function MapPage() {
   useEffect(() => {
     if (!mapRef.current || lmapRef.current) return
     import('leaflet').then(L => {
+      leafletRef.current = L
       const map = L.map(mapRef.current, {
         center: [org?.lat||24.5963, org?.lng||76.169],
         zoom: 15, zoomControl: false,
@@ -37,13 +39,13 @@ export default function MapPage() {
   }, [org])
 
   useEffect(() => {
-    if (!lmapRef.current) return
-    import('leaflet').then(L => renderMarkers(L, lmapRef.current))
-  }, [assets, activeFeeder, layers])
+    if (!lmapRef.current || !leafletRef.current) return
+    renderMarkers(leafletRef.current, lmapRef.current)
+  }, [assets, activeFeeder, layers, wos])
 
   useEffect(() => {
-    if (!lmapRef.current) return
-    import('leaflet').then(L => renderGroups(L, lmapRef.current))
+    if (!lmapRef.current || !leafletRef.current) return
+    renderGroups(leafletRef.current, lmapRef.current)
   }, [groups, assets])
 
   function markerIcon(L, a) {
@@ -125,9 +127,11 @@ export default function MapPage() {
 
   function locateMe() {
     if (!navigator.geolocation) return
-    navigator.geolocation.getCurrentPosition(p => {
-      lmapRef.current?.flyTo([p.coords.latitude,p.coords.longitude],17,{duration:1})
-    })
+    navigator.geolocation.getCurrentPosition(
+      p => { lmapRef.current?.flyTo([p.coords.latitude,p.coords.longitude],17,{duration:1}) },
+      () => {},
+      { enableHighAccuracy:true, timeout:10000, maximumAge:0 }
+    )
   }
 
   const totalOut = useAssetStore(s=>s.totalOutstanding())

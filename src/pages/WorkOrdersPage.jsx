@@ -26,6 +26,7 @@ export default function WorkOrdersPage() {
   const [selectedAssets, setSelectedAssets] = useState([])
   const [assetQ, setAssetQ] = useState('')
   const [spans, setSpans] = useState([])
+  const [sagResult, setSagResult] = useState(null)
 
   // Sag calculator
   const [sagFrom, setSagFrom] = useState('')
@@ -48,19 +49,22 @@ export default function WorkOrdersPage() {
   function addSpan() {
     const from = assets.find(a=>a.id===sagFrom), to = assets.find(a=>a.id===sagTo)
     if (!from||!to) return toast('Select two poles','err')
-    const span = Math.round(haversine(parseFloat(from.latitude),parseFloat(from.longitude),parseFloat(to.latitude),parseFloat(to.longitude)))
+    if (from.id===to.id) return toast('Select two different poles','err')
+    const spanDist = Math.round(haversine(parseFloat(from.latitude),parseFloat(from.longitude),parseFloat(to.latitude),parseFloat(to.longitude)))
     const cond = CONDUCTORS[sagConductor]
-    const { sag } = calcSag({ span, conductorWeight:cond.weight, tension:cond.tension })
-    const groundClearance = sagHeight - sag
+    const { sag } = calcSag({ span:spanDist, conductorWeight:cond.weight, tension:cond.tension })
+    const groundClearance = parseFloat(sagHeight) - sag
     const lineType = from.details?.line_type||'LT'
     const lt = lineType.includes('33')?'HT 33kV':lineType.includes('11')?'HT 11kV':'LT'
     const verd = sagVerdict(groundClearance, lt)
-    setSpans(sp=>[...sp,{
-      from_id:from.id,from_name:from.name,to_id:to.id,to_name:to.name,
-      span_length_m:span,conductor:cond.label,sag_vertical_m:sag,
-      ground_clearance_m:+groundClearance.toFixed(2),line_type:lt,...verd
-    }])
-    toast(`Span added: ${span}m span, sag ${sag}m — ${verd.verdict.toUpperCase()}`,'ok')
+    const spanObj = {
+      from_id:from.id, from_name:from.name, to_id:to.id, to_name:to.name,
+      span_length_m:spanDist, conductor:cond.label, sag_vertical_m:sag,
+      ground_clearance_m:+groundClearance.toFixed(2), line_type:lt, ...verd
+    }
+    setSpans(sp=>[...sp, spanObj])
+    setSagResult(spanObj)
+    toast(`Span: ${spanDist}m · Sag: ${sag}m · Clearance: ${groundClearance.toFixed(2)}m → ${verd.verdict.toUpperCase()}`,'ok')
   }
 
   async function submit() {
@@ -81,9 +85,11 @@ export default function WorkOrdersPage() {
   }
 
   async function closeWO(wo) {
-    const updated = await woApi.close(wo.id,'Completed')
-    update(wo.id, updated)
-    toast('✅ WO closed','ok')
+    try {
+      const updated = await woApi.close(wo.id,'Completed')
+      update(wo.id, updated)
+      toast('✅ WO closed','ok')
+    } catch(e) { toast(e.message,'err') }
   }
 
   function shareWO(wo) {

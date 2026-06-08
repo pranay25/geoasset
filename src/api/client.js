@@ -3,7 +3,11 @@ import { createClient } from '@supabase/supabase-js'
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
 const SUPABASE_ANON = import.meta.env.VITE_SUPABASE_ANON_KEY
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON)
+if (!SUPABASE_URL || !SUPABASE_ANON) {
+  console.error('Missing Supabase env vars. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to your Vercel environment variables.')
+}
+
+export const supabase = createClient(SUPABASE_URL || '', SUPABASE_ANON || '')
 
 // ── Auth ──────────────────────────────────────────────────────
 export const authApi = {
@@ -27,57 +31,47 @@ export const authApi = {
   },
   async getProfile(userId) {
     const { data, error } = await supabase
-      .from('profiles').select('*, subdivisions(code,name), organisations!org_id(*)')
+      .from('profiles').select('*, subdivisions(code,name), organisations(id,name,circle,division,city,state,lat,lng)')
       .eq('id', userId).single()
     if (error) throw new Error(error.message)
     return data
   },
   async setup({ org, adminUser }) {
-    // 1. Sign up and immediately sign in (works even if email confirm is on,
-    //    because we sign in right after to get a valid session for DB inserts)
+    // Step 1: Create auth user
     const { data: authData, error: authErr } = await supabase.auth.signUp({
       email: adminUser.email,
       password: adminUser.password,
       options: { emailRedirectTo: window.location.origin }
     })
     if (authErr) throw new Error(authErr.message)
+    const userId = authData.user.id
 
-    // Sign in immediately to get session (needed for RLS on inserts)
-    const { data: signInData, error: signInErr } = await supabase.auth.signInWithPassword({
+    // Step 2: Sign in immediately to get a valid session for RPC call
+    const { error: signInErr } = await supabase.auth.signInWithPassword({
       email: adminUser.email,
       password: adminUser.password,
     })
-    // If sign in fails (email not confirmed), still try to proceed
-    // using the session from signUp if available
-    const userId = authData.user.id
+    if (signInErr) throw new Error('Could not sign in after signup — make sure "Confirm email" is DISABLED in Supabase → Auth → Providers → Email')
 
-    // 2. Create organisation (use service role bypass via RLS allow_setup policy)
-    const { data: orgData, error: orgErr } = await supabase
-      .from('organisations').insert({
-        name: org.name, circle: org.circle, division: org.division,
-        city: org.city, state: org.state, lat: org.lat, lng: org.lng,
-      }).select().single()
-    if (orgErr) throw new Error('Org create failed: ' + orgErr.message)
-
-    // 3. Create subdivisions
-    if (org.subdivisions?.length) {
-      const { error: sdErr } = await supabase.from('subdivisions').insert(
-        org.subdivisions.map(s => ({ org_id: orgData.id, code: s.code, name: s.name }))
-      )
-      if (sdErr) console.warn('Subdivision insert:', sdErr.message)
-    }
-
-    // 4. Create admin profile
-    const { error: profErr } = await supabase.from('profiles').insert({
-      id: userId, org_id: orgData.id,
-      employee_id: adminUser.employeeId,
-      name: adminUser.name,
-      mobile: adminUser.mobile || null,
-      role: 'admin',
+    // Step 3: Call SECURITY DEFINER function — bypasses RLS entirely
+    // This creates org + subdivisions + profile atomically in one SQL transaction
+    const { data: result, error: rpcErr } = await supabase.rpc('setup_organisation', {
+      p_org_name:     org.name,
+      p_circle:       org.circle || '',
+      p_division:     org.division,
+      p_city:         org.city,
+      p_state:        org.state,
+      p_lat:          parseFloat(org.lat) || 24.5963,
+      p_lng:          parseFloat(org.lng) || 76.169,
+      p_subdivisions: JSON.stringify(org.subdivisions || []),
+      p_user_id:      userId,
+      p_employee_id:  adminUser.employeeId,
+      p_user_name:    adminUser.name,
+      p_mobile:       adminUser.mobile || null,
     })
-    if (profErr) throw new Error('Profile create failed: ' + profErr.message)
+    if (rpcErr) throw new Error('Setup failed: ' + rpcErr.message)
 
-    return { org: orgData, userId }
+    return { org_id: result.org_id, userId }
   },
 }
 
@@ -96,7 +90,6 @@ export const assetsApi = {
     return data
   },
   async create(payload) {
-    const year = new Date().getFullYear()
     const seq = await supabase.rpc('next_counter', { p_org_id: _orgId, p_name: 'asset' })
     const prefix = { pole:'P', dtr:'D', meter:'M', line:'L', pillar:'FP', iso:'I' }[payload.asset_type] || 'A'
     const asset_code = `${prefix}-${String(seq.data).padStart(4,'0')}`
@@ -255,10 +248,11 @@ export const usersApi = {
     return data
   },
   async create({ email, password, ...profile }) {
-    const { data: auth, error: authErr } = await supabase.auth.admin.createUser({
-      email, password, email_confirm: true,
-    })
+    // Sign up new user — email confirm should be OFF in Supabase settings
+    const { data: auth, error: authErr } = await supabase.auth.signUp({ email, password })
     if (authErr) throw new Error(authErr.message)
+    if (!auth.user) throw new Error('User creation failed — check Supabase Auth settings')
+    // Insert profile row for the new user
     const { error: profErr } = await supabase.from('profiles').insert({
       id: auth.user.id, org_id: _orgId, ...profile,
     })
@@ -319,7 +313,13 @@ export const configApi = {
     return data
   },
   async isSetupDone() {
-    const { count } = await supabase.from('organisations').select('id', { count: 'exact', head: true })
-    return (count || 0) > 0
+    // Use auth.users count via a public RPC or just attempt to read
+    try {
+      const { count, error } = await supabase
+        .from('organisations')
+        .select('id', { count: 'exact', head: true })
+      if (error) return false  // RLS blocked = no org yet = not set up
+      return (count || 0) > 0
+    } catch { return false }
   },
 }

@@ -124,6 +124,7 @@ export default function SurveyPage() {
 
   function initInlineMap() {
     if (!inlineMapRef.current) return
+    if (inlineLMapRef.current) { setTimeout(()=>inlineLMapRef.current?.invalidateSize(), 100); return }
     import('leaflet').then(L => {
       if (inlineLMapRef.current) { inlineLMapRef.current.invalidateSize(); return }
       const center = [bestFix?.lat||24.5963, bestFix?.lng||76.169]
@@ -187,8 +188,9 @@ export default function SurveyPage() {
 
     setSaving(true)
     try {
-      const details = { ...fields }
-      let name = fields.number||fields.k_number||fields.unit_number||fields.iso_number||`${assetType.toUpperCase()}-NEW`
+      // Extract top-level columns from details, keep rest in JSONB
+      const { outstanding_amount, last_payment_date, mobile: mobileNum, ...detailsOnly } = fields
+      const name = fields.number||fields.k_number||fields.unit_number||fields.iso_number||`${assetType.toUpperCase()}-NEW`
       const payload = {
         asset_type: assetType,
         name,
@@ -197,10 +199,10 @@ export default function SurveyPage() {
         survey_accuracy_m: gps.acc,
         feeder_id: feederId||null,
         surveyed_by_id: profile?.id,
-        details,
-        outstanding_amount: assetType==='meter' ? (parseFloat(fields.outstanding_amount)||0) : 0,
-        last_payment_date: assetType==='meter' ? (fields.last_payment_date||null) : null,
-        mobile: assetType==='meter' ? (fields.mobile||null) : null,
+        details: detailsOnly,
+        outstanding_amount: assetType==='meter' ? (parseFloat(outstanding_amount)||0) : 0,
+        last_payment_date: assetType==='meter' ? (last_payment_date||null) : null,
+        mobile: assetType==='meter' ? (mobileNum||null) : null,
       }
       const saved = await assetsApi.create(payload)
       addAsset(saved)

@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useAssetStore, useWOStore, useGroupStore, useAuthStore, useUIStore } from '../store/index.js'
 import { assetsApi, groupsApi } from '../api/client.js'
-import { ASSET_TYPES, STATUS_COLORS, fmtOut, outColor, waOpen, buildConsumerNotice } from '../utils/constants.js'
+import { ASSET_TYPES, STATUS_COLORS, fmtOut, outColor, waOpen, buildConsumerNotice, buildGroupMessage } from '../utils/constants.js'
 
 export function AssetsPage() {
   const { assets, fetch, update } = useAssetStore()
@@ -34,10 +34,12 @@ export function AssetsPage() {
   })
 
   async function flag(a) {
-    const ns = a.status==='flag'?'ok':'flag'
-    const updated = await assetsApi.update(a.id,{status:ns,flag_note:ns==='flag'?'Flagged':null})
-    update(a.id,{status:ns,flag_note:updated.flag_note})
-    toast(ns==='flag'?'🚩 Flagged':'✅ Unflagged','ok')
+    try {
+      const ns = a.status==='flag'?'ok':'flag'
+      const updated = await assetsApi.update(a.id,{status:ns,flag_note:ns==='flag'?'Flagged':null})
+      update(a.id,{status:ns,flag_note:updated.flag_note})
+      toast(ns==='flag'?'🚩 Flagged':'✅ Unflagged','ok')
+    } catch(e) { toast(e.message,'err') }
   }
 
   const CHIPS = [
@@ -308,7 +310,7 @@ function GroupsPanel({ assets, groups, org, profile, onAdd, onUpdate, onRemove, 
                 </div>
                 <div className="flex gap-1">
                   <button onClick={()=>startEdit(g)} className="px-2 py-1 rounded-lg border border-bd text-mu text-[10px]">✏️</button>
-                  <button onClick={()=>{ if(org) waOpen(require('../utils/constants.js').buildGroupMessage(g,gMeters,org)) }}
+                  <button onClick={()=>{ if(org) waOpen(buildGroupMessage(g,gMeters,org)) }}
                     className="px-2 py-1 rounded-lg border border-green-500/30 text-green-400 text-[10px]">📱</button>
                   <button onClick={()=>del(g.id)} className="px-2 py-1 rounded-lg border border-red-500/30 text-red-400 text-[10px]">🗑</button>
                 </div>

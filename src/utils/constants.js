@@ -108,7 +108,7 @@ export function buildWOMessage(wo, assets, org) {
     `*Priority:* ${(wo.priority||'normal').toUpperCase()}`,
     `*Status:* ${(wo.status||'open').toUpperCase()}`,
     `*Due:* ${wo.due_date || '–'}`,
-    wo.profiles?.name ? `*Assigned:* ${wo.profiles.name}` : null,
+    (wo.profiles?.name||wo.assigned_name) ? `*Assigned:* ${wo.profiles?.name||wo.assigned_name}` : null,
     `——————————————`,
     `*Assets (${assets.length}):*`,
     ...assets.map(a => `• ${a.name} (${ASSET_TYPES[a.asset_type]?.label||a.asset_type}): ${parseFloat(a.latitude).toFixed(5)}N, ${parseFloat(a.longitude).toFixed(5)}E`),
