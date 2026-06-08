@@ -1,9 +1,14 @@
 import { useEffect } from 'react'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import { useAuthStore } from './store/index.js'
-import AppShell from './components/layout/AppShell.jsx'
+
+// Shared pages
 import LoginPage from './pages/LoginPage.jsx'
 import SetupPage from './pages/SetupPage.jsx'
+import DeviceSelectPage from './pages/DeviceSelectPage.jsx'
+
+// Desktop pages
+import AppShell from './components/layout/AppShell.jsx'
 import MapPage from './pages/MapPage.jsx'
 import SurveyPage from './pages/SurveyPage.jsx'
 import { AssetsPage } from './pages/AssetsPage.jsx'
@@ -11,6 +16,16 @@ import { FeedersPage } from './pages/FeedersPage.jsx'
 import WorkOrdersPage from './pages/WorkOrdersPage.jsx'
 import MeasurementBooksPage from './pages/MeasurementBooksPage.jsx'
 import UsersPage from './pages/UsersPage.jsx'
+
+// Mobile pages
+import MobileShell from './components/mobile/MobileShell.jsx'
+import MobileMapPage from './pages/mobile/MobileMapPage.jsx'
+import MobileSurveyPage from './pages/mobile/MobileSurveyPage.jsx'
+import { MobileAssetsPage, MobileWOPage } from './pages/mobile/MobilePages.jsx'
+
+function getUIMode() {
+  return localStorage.getItem('geoasset_ui_mode') // 'mobile' | 'desktop' | null
+}
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuthStore()
@@ -27,6 +42,13 @@ function ProtectedRoute({ children }) {
   return children
 }
 
+function RootRedirect() {
+  const mode = getUIMode()
+  if (!mode) return <Navigate to="/device" replace />
+  if (mode === 'mobile') return <Navigate to="/m/map" replace />
+  return <Navigate to="/d/map" replace />
+}
+
 export default function App() {
   const { init } = useAuthStore()
   useEffect(() => { init() }, [])
@@ -34,23 +56,48 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
+        {/* Public */}
         <Route path="/login"  element={<LoginPage />} />
         <Route path="/setup"  element={<SetupPage />} />
-        <Route path="/*" element={
+        <Route path="/device" element={<ProtectedRoute><DeviceSelectPage /></ProtectedRoute>} />
+
+        {/* Root redirect */}
+        <Route path="/" element={<ProtectedRoute><RootRedirect /></ProtectedRoute>} />
+
+        {/* ── Desktop routes ── */}
+        <Route path="/d/*" element={
           <ProtectedRoute>
             <AppShell>
               <Routes>
-                <Route path="/"        element={<MapPage />} />
-                <Route path="/survey"  element={<SurveyPage />} />
-                <Route path="/assets"  element={<AssetsPage />} />
-                <Route path="/feeders" element={<FeedersPage />} />
-                <Route path="/wo"      element={<WorkOrdersPage />} />
-                <Route path="/mb"      element={<MeasurementBooksPage />} />
-                <Route path="/users"   element={<UsersPage />} />
+                <Route path="map"    element={<MapPage />} />
+                <Route path="survey" element={<SurveyPage />} />
+                <Route path="assets" element={<AssetsPage />} />
+                <Route path="feeders"element={<FeedersPage />} />
+                <Route path="wo"     element={<WorkOrdersPage />} />
+                <Route path="mb"     element={<MeasurementBooksPage />} />
+                <Route path="users"  element={<UsersPage />} />
+                <Route path="*"      element={<Navigate to="/d/map" replace />} />
               </Routes>
             </AppShell>
           </ProtectedRoute>
         } />
+
+        {/* ── Mobile routes ── */}
+        <Route path="/m/*" element={
+          <ProtectedRoute>
+            <MobileShell>
+              <Routes>
+                <Route path="map"    element={<MobileMapPage />} />
+                <Route path="survey" element={<MobileSurveyPage />} />
+                <Route path="assets" element={<MobileAssetsPage />} />
+                <Route path="wo"     element={<MobileWOPage />} />
+                <Route path="*"      element={<Navigate to="/m/map" replace />} />
+              </Routes>
+            </MobileShell>
+          </ProtectedRoute>
+        } />
+
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
   )

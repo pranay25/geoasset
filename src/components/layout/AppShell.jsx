@@ -3,13 +3,13 @@ import { useAuthStore, useUIStore, useAssetStore } from '../../store/index.js'
 import { ROLES, fmtOut } from '../../utils/constants.js'
 
 const TABS = [
-  { path: '/',        icon: '🗺️',  label: 'MAP'     },
-  { path: '/survey',  icon: '📡',  label: 'SURVEY'  },
-  { path: '/assets',  icon: '🏗️', label: 'ASSETS'  },
-  { path: '/feeders', icon: '⚡',  label: 'FEEDERS' },
-  { path: '/wo',      icon: '🔧',  label: 'WOs'     },
-  { path: '/mb',      icon: '📋',  label: 'MB'      },
-  { path: '/users',   icon: '👥',  label: 'USERS'   },
+  { path: '/d/map',    icon: '🗺️',  label: 'MAP'     },
+  { path: '/d/survey', icon: '📡',  label: 'SURVEY'  },
+  { path: '/d/assets', icon: '🏗️', label: 'ASSETS'  },
+  { path: '/d/feeders',icon: '⚡',  label: 'FEEDERS' },
+  { path: '/d/wo',     icon: '🔧',  label: 'WOs'     },
+  { path: '/d/mb',     icon: '📋',  label: 'MB'      },
+  { path: '/d/users',  icon: '👥',  label: 'USERS'   },
 ]
 
 export default function AppShell({ children }) {
@@ -56,6 +56,10 @@ export default function AppShell({ children }) {
                 style={{ color: role?.color }}>{role?.short}</div>
             </div>
           </div>
+          <button onClick={()=>{ localStorage.setItem('geoasset_ui_mode','mobile'); window.location.href='/m/map' }}
+            className="w-7 h-7 rounded-lg bg-sf2 border border-bd flex items-center justify-center text-mu hover:text-a text-xs" title="Switch to Mobile">
+            📱
+          </button>
           <button onClick={logout}
             className="w-7 h-7 rounded-lg bg-sf2 border border-bd flex items-center justify-center text-mu hover:text-red-400 text-xs">
             ←
@@ -71,9 +75,7 @@ export default function AppShell({ children }) {
       {/* Tab bar */}
       <nav className="flex bg-sf border-t border-bd flex-shrink-0 safe-area-bottom">
         {visibleTabs.map(tab => {
-          const active = tab.path === '/'
-            ? location.pathname === '/'
-            : location.pathname.startsWith(tab.path)
+          const active = location.pathname === tab.path || location.pathname.startsWith(tab.path + '/')
           return (
             <button key={tab.path} onClick={() => navigate(tab.path)}
               className={`flex-1 flex flex-col items-center justify-center py-2 gap-0.5 transition-colors relative

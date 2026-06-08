@@ -5,63 +5,93 @@ const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFz
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON)
 
+// ── Auth ──────────────────────────────────────────────────────
 export const authApi = {
   async login(email, password) {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error) throw new Error(error.message)
+    if (error) {
+      if (error.message.includes('Email not confirmed'))
+        throw new Error('Email not confirmed — go to Supabase → Auth → Providers → Email → disable "Confirm email"')
+      if (error.message.includes('Invalid login credentials'))
+        throw new Error('Wrong email or password')
+      throw new Error(error.message)
+    }
     return data
   },
-  async logout() { await supabase.auth.signOut() },
+  async logout() {
+    await supabase.auth.signOut()
+  },
   async getSession() {
     const { data } = await supabase.auth.getSession()
     return data.session
   },
   async getProfile(userId) {
+    // Fetch separately to avoid join coercion errors
     const { data: profile, error: profErr } = await supabase
       .from('profiles').select('*').eq('id', userId).single()
     if (profErr) throw new Error(profErr.message)
+
     const { data: org } = await supabase
       .from('organisations').select('*').eq('id', profile.org_id).single()
+
     let subdiv = null
     if (profile.subdivision_id) {
       const { data: sd } = await supabase
         .from('subdivisions').select('code,name').eq('id', profile.subdivision_id).single()
       subdiv = sd
     }
+
     return { ...profile, organisations: org, subdivisions: subdiv }
   },
   async setup({ org, adminUser }) {
+    // Step 1: Create auth user
     const { data: authData, error: authErr } = await supabase.auth.signUp({
-      email: adminUser.email, password: adminUser.password,
+      email: adminUser.email,
+      password: adminUser.password,
       options: { emailRedirectTo: window.location.origin }
     })
     if (authErr) throw new Error(authErr.message)
     const userId = authData.user.id
+
+    // Step 2: Sign in immediately to get a valid session for RPC call
     const { error: signInErr } = await supabase.auth.signInWithPassword({
-      email: adminUser.email, password: adminUser.password,
+      email: adminUser.email,
+      password: adminUser.password,
     })
-    if (signInErr) throw new Error('Could not sign in after signup')
+    if (signInErr) throw new Error('Could not sign in after signup — make sure "Confirm email" is DISABLED in Supabase → Auth → Providers → Email')
+
+    // Step 3: Call SECURITY DEFINER function — bypasses RLS entirely
+    // This creates org + subdivisions + profile atomically in one SQL transaction
     const { data: result, error: rpcErr } = await supabase.rpc('setup_organisation', {
-      p_org_name: org.name, p_circle: org.circle || '',
-      p_division: org.division, p_city: org.city, p_state: org.state,
-      p_lat: parseFloat(org.lat) || 24.5963, p_lng: parseFloat(org.lng) || 76.169,
+      p_org_name:     org.name,
+      p_circle:       org.circle || '',
+      p_division:     org.division,
+      p_city:         org.city,
+      p_state:        org.state,
+      p_lat:          parseFloat(org.lat) || 24.5963,
+      p_lng:          parseFloat(org.lng) || 76.169,
       p_subdivisions: JSON.stringify(org.subdivisions || []),
-      p_user_id: userId, p_employee_id: adminUser.employeeId,
-      p_user_name: adminUser.name, p_mobile: adminUser.mobile || null,
+      p_user_id:      userId,
+      p_employee_id:  adminUser.employeeId,
+      p_user_name:    adminUser.name,
+      p_mobile:       adminUser.mobile || null,
     })
     if (rpcErr) throw new Error('Setup failed: ' + rpcErr.message)
+
     return { org_id: result.org_id, userId }
   },
 }
 
+// ── Helper: get my org_id ─────────────────────────────────────
 let _orgId = null
 export function setOrgId(id) { _orgId = id }
 export function getOrgId() { return _orgId }
 
+// ── Assets ───────────────────────────────────────────────────
 export const assetsApi = {
   async list() {
-    const { data, error } = await supabase.from('assets')
-      .select('*, feeders(code,name), profiles(name)')
+    const { data, error } = await supabase
+      .from('assets').select('*, feeders(code,name), profiles(name)')
       .eq('org_id', _orgId).order('created_at', { ascending: false })
     if (error) throw error
     return data
@@ -69,9 +99,10 @@ export const assetsApi = {
   async create(payload) {
     const seq = await supabase.rpc('next_counter', { p_org_id: _orgId, p_name: 'asset' })
     const prefix = { pole:'P', dtr:'D', meter:'M', line:'L', pillar:'FP', iso:'I' }[payload.asset_type] || 'A'
-    const asset_code = prefix + '-' + String(seq.data).padStart(4,'0')
+    const asset_code = `${prefix}-${String(seq.data).padStart(4,'0')}`
     const { data, error } = await supabase.from('assets')
-      .insert({ ...payload, org_id: _orgId, asset_code }).select().single()
+      .insert({ ...payload, org_id: _orgId, asset_code })
+      .select().single()
     if (error) throw error
     return data
   },
@@ -93,18 +124,19 @@ export const assetsApi = {
     for (const rec of records) {
       const kno = String(rec.k_number || rec.k_no || '').trim()
       if (!kno) continue
-      const meter = meters && meters.find(function(m) {
-        return m.name === kno || (m.details && m.details.k_number === kno)
-      })
+      const meter = meters?.find(m =>
+        m.name === kno || m.details?.k_number === kno ||
+        m.name?.replace(/\s/g,'') === kno.replace(/\s/g,'')
+      )
       if (meter) {
-        const out = parseFloat(rec.outstanding_amount || 0) || 0
+        const out = parseFloat(rec.outstanding_amount || rec.outstanding || 0) || 0
         await supabase.from('assets').update({
           outstanding_amount: out,
           last_payment_date: rec.last_payment_date || null,
+          mobile: rec.mobile ? rec.mobile.replace(/\D/g,'').slice(-10) : undefined,
           updated_at: new Date().toISOString(),
         }).eq('id', meter.id)
-        results.matched++
-        results.total += out
+        results.matched++; results.total += out
       } else {
         results.notFound++
         if (results.notFoundList.length < 20) results.notFoundList.push(kno)
@@ -114,6 +146,7 @@ export const assetsApi = {
   },
 }
 
+// ── Feeders ──────────────────────────────────────────────────
 export const feedersApi = {
   async list() {
     const { data, error } = await supabase.from('feeders')
@@ -135,12 +168,13 @@ export const feedersApi = {
   },
   async delete(id) {
     const { data: linked } = await supabase.from('assets').select('id').eq('feeder_id', id).limit(1)
-    if (linked && linked.length) throw new Error('Cannot delete — assets linked to this feeder')
+    if (linked?.length) throw new Error('Cannot delete — assets linked to this feeder')
     const { error } = await supabase.from('feeders').delete().eq('id', id)
     if (error) throw error
   },
 }
 
+// ── Work Orders ───────────────────────────────────────────────
 export const woApi = {
   async list() {
     const { data, error } = await supabase.from('work_orders')
@@ -151,11 +185,12 @@ export const woApi = {
   },
   async create(payload) {
     const seq = await supabase.rpc('next_counter', { p_org_id: _orgId, p_name: 'wo' })
-    const wo_number = 'WO-' + new Date().getFullYear() + '-' + String(seq.data).padStart(4,'0')
+    const wo_number = `WO-${new Date().getFullYear()}-${String(seq.data).padStart(4,'0')}`
     const { data, error } = await supabase.from('work_orders')
       .insert({ ...payload, org_id: _orgId, wo_number }).select().single()
     if (error) throw error
-    if (payload.asset_ids && payload.asset_ids.length) {
+    // Flag linked assets
+    if (payload.asset_ids?.length) {
       await supabase.from('assets').update({ status: 'flag', flag_note: payload.issue_type })
         .in('id', payload.asset_ids)
     }
@@ -168,8 +203,9 @@ export const woApi = {
         remarks: remarks || '', updated_at: new Date().toISOString() })
       .eq('id', id).select().single()
     if (error) throw error
-    if (wo && wo.asset_ids && wo.asset_ids.length) {
-      await supabase.from('assets').update({ status: 'ok', flag_note: null }).in('id', wo.asset_ids)
+    if (wo?.asset_ids?.length) {
+      await supabase.from('assets').update({ status: 'ok', flag_note: null })
+        .in('id', wo.asset_ids)
     }
     return data
   },
@@ -182,6 +218,7 @@ export const woApi = {
   },
 }
 
+// ── Measurement Books ─────────────────────────────────────────
 export const mbApi = {
   async list() {
     const { data, error } = await supabase.from('measurement_books')
@@ -192,8 +229,8 @@ export const mbApi = {
   },
   async create(payload) {
     const seq = await supabase.rpc('next_counter', { p_org_id: _orgId, p_name: 'mb' })
-    const mb_number = 'MB-' + new Date().getFullYear() + '-' + String(seq.data).padStart(4,'0')
-    const total_amount = (payload.items || []).reduce(function(s, i) { return s + (parseFloat(i.amount) || 0) }, 0)
+    const mb_number = `MB-${new Date().getFullYear()}-${String(seq.data).padStart(4,'0')}`
+    const total_amount = (payload.items || []).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0)
     const { data, error } = await supabase.from('measurement_books')
       .insert({ ...payload, org_id: _orgId, mb_number, total_amount }).select().single()
     if (error) throw error
@@ -209,6 +246,7 @@ export const mbApi = {
   },
 }
 
+// ── Users (Profiles) ─────────────────────────────────────────
 export const usersApi = {
   async list() {
     const { data, error } = await supabase.from('profiles')
@@ -217,9 +255,11 @@ export const usersApi = {
     return data
   },
   async create({ email, password, ...profile }) {
+    // Sign up new user — email confirm should be OFF in Supabase settings
     const { data: auth, error: authErr } = await supabase.auth.signUp({ email, password })
     if (authErr) throw new Error(authErr.message)
-    if (!auth.user) throw new Error('User creation failed')
+    if (!auth.user) throw new Error('User creation failed — check Supabase Auth settings')
+    // Insert profile row for the new user
     const { error: profErr } = await supabase.from('profiles').insert({
       id: auth.user.id, org_id: _orgId, ...profile,
     })
@@ -239,6 +279,7 @@ export const usersApi = {
   },
 }
 
+// ── Outstanding Groups ────────────────────────────────────────
 export const groupsApi = {
   async list() {
     const { data, error } = await supabase.from('outstanding_groups')
@@ -264,6 +305,7 @@ export const groupsApi = {
   },
 }
 
+// ── Config ───────────────────────────────────────────────────
 export const configApi = {
   async get(orgId) {
     const { data, error } = await supabase.from('organisations')
@@ -278,11 +320,13 @@ export const configApi = {
     return data
   },
   async isSetupDone() {
+    // Use auth.users count via a public RPC or just attempt to read
     try {
       const { count, error } = await supabase
-        .from('organisations').select('id', { count: 'exact', head: true })
-      if (error) return false
+        .from('organisations')
+        .select('id', { count: 'exact', head: true })
+      if (error) return false  // RLS blocked = no org yet = not set up
       return (count || 0) > 0
-    } catch(e) { return false }
+    } catch { return false }
   },
 }
