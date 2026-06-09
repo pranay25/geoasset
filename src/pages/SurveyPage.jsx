@@ -74,7 +74,7 @@ const ASSET_FIELDS = {
 }
 
 export default function SurveyPage() {
-  const { assets, fetch: fetchAssets, add: addAsset } = useAssetStore()
+  const { assets, fetch: fetchAssets, add: addAsset, remove } = useAssetStore()
   const { feeders } = useFeederStore()
   const { profile } = useAuthStore()
   const { toast } = useUIStore()
@@ -240,7 +240,7 @@ export default function SurveyPage() {
       // Delete replaced assets if resurveying
       for (const id of replaceIds) {
         await assetsApi.delete(id)
-        useAssetStore.getState().remove(id)
+        remove(id)
       }
       const { outstanding_amount, last_payment_date, mobile: mobileNum, _remarks, ...detailsOnly } = flds
       const name = type==='meter'
@@ -267,16 +267,18 @@ export default function SurveyPage() {
         saved = await assetsApi.update(saved.id, { name: saved.asset_code })
       }
       addAsset(saved)
-      await auditApi.log({
-        action: replaceIds.length ? 'RESURVEY' : 'SURVEY',
-        category: 'survey',
-        severity: replaceIds.length ? 'warn' : 'info',
-        description: replaceIds.length
-          ? `Resurveyed: ${saved.asset_code} replaced ${replaceIds.length} previous asset(s)`
-          : `New asset surveyed: ${saved.asset_code} (${type})`,
-        meta: { asset_id: saved.id, asset_code: saved.asset_code, asset_type: type,
-          lat: gpsCoords.lat, lng: gpsCoords.lng, replaced_ids: replaceIds },
-      })
+      try {
+        await auditApi.log({
+          action: replaceIds.length ? 'RESURVEY' : 'SURVEY',
+          category: 'survey',
+          severity: replaceIds.length ? 'warn' : 'info',
+          description: replaceIds.length
+            ? `Resurveyed: ${saved.asset_code} replaced ${replaceIds.length} previous asset(s)`
+            : `New asset surveyed: ${saved.asset_code} (${type})`,
+          meta: { asset_id: saved.id, asset_code: saved.asset_code, asset_type: type,
+            lat: gpsCoords.lat, lng: gpsCoords.lng, replaced_ids: replaceIds },
+        })
+      } catch(auditErr) { console.warn('Audit log failed (non-blocking):', auditErr) }
       toast('✅ ' + saved.asset_code + ' saved', 'ok')
       clearSession()
       setGpsState('standby'); setBestFix(null)

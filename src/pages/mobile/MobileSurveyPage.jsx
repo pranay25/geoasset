@@ -55,7 +55,7 @@ const ASSET_FIELDS = {
 
 export default function MobileSurveyPage() {
   const navigate = useNavigate()
-  const { assets, fetch: fetchAssets, add: addAsset } = useAssetStore()
+  const { assets, fetch: fetchAssets, add: addAsset, remove } = useAssetStore()
   const { feeders } = useFeederStore()
   const { profile } = useAuthStore()
   const { toast } = useUIStore()
@@ -188,7 +188,7 @@ export default function MobileSurveyPage() {
     try {
       for (const id of replaceIds) {
         await assetsApi.delete(id)
-        useAssetStore.getState().remove(id)
+        remove(id)
       }
       const { outstanding_amount, mobile: mob, _remarks, ...detailsOnly } = flds
       const name = type==='meter'
@@ -209,15 +209,17 @@ export default function MobileSurveyPage() {
         saved = await assetsApi.update(saved.id, { name: saved.asset_code })
       }
       addAsset(saved)
-      await auditApi.log({
-        action: replaceIds.length ? 'RESURVEY' : 'SURVEY',
-        category: 'survey',
-        severity: replaceIds.length ? 'warn' : 'info',
-        description: replaceIds.length
-          ? `Resurveyed: ${saved.asset_code} replaced ${replaceIds.length} asset(s)`
-          : `New asset: ${saved.asset_code} (${type})`,
-        meta: { asset_id: saved.id, lat: gpsC.lat, lng: gpsC.lng, replaced_ids: replaceIds },
-      })
+      try {
+        await auditApi.log({
+          action: replaceIds.length ? 'RESURVEY' : 'SURVEY',
+          category: 'survey',
+          severity: replaceIds.length ? 'warn' : 'info',
+          description: replaceIds.length
+            ? `Resurveyed: ${saved.asset_code} replaced ${replaceIds.length} asset(s)`
+            : `New asset surveyed: ${saved.asset_code} (${type})`,
+          meta: { asset_id: saved.id, lat: gpsC.lat, lng: gpsC.lng, replaced_ids: replaceIds },
+        })
+      } catch(auditErr) { console.warn('Audit log failed (non-blocking):', auditErr) }
       toast('✅ ' + saved.asset_code + ' saved','ok')
       clearSession()
       setGpsState('idle'); setBestFix(null)
