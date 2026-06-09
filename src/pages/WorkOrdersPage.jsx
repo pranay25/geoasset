@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useWOStore, useAssetStore, useFeederStore, useUserStore, useAuthStore, useUIStore } from '../store/index.js'
-import { woApi } from '../api/client.js'
+import { woApi, auditApi } from '../api/client.js'
 import { ASSET_TYPES, PRIORITY_COLORS, STATUS_COLORS, CONDUCTORS, IE_CLEARANCE, haversine, calcSag, sagVerdict, waOpen, buildWOMessage } from '../utils/constants.js'
 
 export default function WorkOrdersPage() {
@@ -79,6 +79,9 @@ export default function WorkOrdersPage() {
         asset_ids:selectedAssets.map(a=>a.id), spans,
       })
       add({ ...wo, profiles:users.find(u=>u.id===assigneeId) })
+      await auditApi.log({ action:'WO_CREATED', category:'wo', severity:'info',
+        description:`Work Order ${wo.wo_number} created: ${wo.title}`,
+        meta: { wo_number:wo.wo_number, issue_type:wo.issue_type, priority:wo.priority, asset_count:selectedAssets.length } })
       toast(`✅ ${wo.wo_number} created`,'ok')
       setShowForm(false); resetForm()
     } catch(e) { toast(e.message,'err') } finally { setSaving(false) }
@@ -88,6 +91,9 @@ export default function WorkOrdersPage() {
     try {
       const updated = await woApi.close(wo.id,'Completed')
       update(wo.id, updated)
+      await auditApi.log({ action:'WO_CLOSED', category:'wo', severity:'info',
+        description:`Work Order ${wo.wo_number} closed`,
+        meta: { wo_number:wo.wo_number } })
       toast('✅ WO closed','ok')
     } catch(e) { toast(e.message,'err') }
   }

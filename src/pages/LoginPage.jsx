@@ -83,10 +83,13 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <div className="text-center mt-4">
-          <button onClick={() => navigate('/setup')} className="text-[10px] text-mu hover:text-a underline transition-colors">
+        <div className="text-center mt-4 space-y-2">
+          <button onClick={() => navigate('/setup')} className="text-[10px] text-mu hover:text-a underline transition-colors block mx-auto">
             First time? Setup organisation →
           </button>
+          <a href="/outages" className="text-[10px] text-amber-400/70 hover:text-amber-400 underline transition-colors block">
+            ⚡ View Power Outages in my area (no login)
+          </a>
         </div>
       </div>
     </div>

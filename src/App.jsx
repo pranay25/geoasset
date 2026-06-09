@@ -16,6 +16,14 @@ import { FeedersPage } from './pages/FeedersPage.jsx'
 import WorkOrdersPage from './pages/WorkOrdersPage.jsx'
 import MeasurementBooksPage from './pages/MeasurementBooksPage.jsx'
 import UsersPage from './pages/UsersPage.jsx'
+import HierarchyPage from './pages/HierarchyPage.jsx'
+import AuditLogPage from './pages/AuditLogPage.jsx'
+import ShutdownPage from './pages/ShutdownPage.jsx'
+import PatrolPage from './pages/PatrolPage.jsx'
+import SQLEditorPage from './pages/SQLEditorPage.jsx'
+import PublicShutdownPage from './pages/PublicShutdownPage.jsx'
+import ShutdownAlertModal from './components/ShutdownAlertModal.jsx'
+import ExportPage from './pages/ExportPage.jsx'
 
 // Mobile pages
 import MobileShell from './components/mobile/MobileShell.jsx'
@@ -61,12 +69,17 @@ export default function App() {
         <Route path="/setup"  element={<SetupPage />} />
         <Route path="/device" element={<ProtectedRoute><DeviceSelectPage /></ProtectedRoute>} />
 
+        {/* Public — no auth needed */}
+        <Route path="/outages" element={<PublicShutdownPage />} />
+
         {/* Root redirect */}
         <Route path="/" element={<ProtectedRoute><RootRedirect /></ProtectedRoute>} />
 
         {/* ── Desktop routes ── */}
         <Route path="/d/*" element={
           <ProtectedRoute>
+            <>
+            <ShutdownAlertModal />
             <AppShell>
               <Routes>
                 <Route path="map"    element={<MapPage />} />
@@ -75,25 +88,37 @@ export default function App() {
                 <Route path="feeders"element={<FeedersPage />} />
                 <Route path="wo"     element={<WorkOrdersPage />} />
                 <Route path="mb"     element={<MeasurementBooksPage />} />
-                <Route path="users"  element={<UsersPage />} />
-                <Route path="*"      element={<Navigate to="/d/map" replace />} />
+                <Route path="users"     element={<UsersPage />} />
+                <Route path="hierarchy" element={<HierarchyPage />} />
+                <Route path="audit"     element={<AuditLogPage />} />
+                <Route path="shutdown"  element={<ShutdownPage />} />
+                <Route path="patrol"    element={<PatrolPage />} />
+                <Route path="sql"       element={<SQLEditorPage />} />
+                <Route path="export"    element={<ExportPage />} />
+                <Route path="*"         element={<Navigate to="/d/map" replace />} />
               </Routes>
             </AppShell>
+            </>
           </ProtectedRoute>
         } />
 
         {/* ── Mobile routes ── */}
         <Route path="/m/*" element={
           <ProtectedRoute>
+            <>
+            <ShutdownAlertModal />
             <MobileShell>
               <Routes>
                 <Route path="map"    element={<MobileMapPage />} />
                 <Route path="survey" element={<MobileSurveyPage />} />
                 <Route path="assets" element={<MobileAssetsPage />} />
-                <Route path="wo"     element={<MobileWOPage />} />
+                <Route path="wo"       element={<MobileWOPage />} />
+                <Route path="shutdown" element={<ShutdownPage />} />
+                <Route path="patrol"    element={<PatrolPage />} />
                 <Route path="*"      element={<Navigate to="/m/map" replace />} />
               </Routes>
             </MobileShell>
+            </>
           </ProtectedRoute>
         } />
 

@@ -7,6 +7,8 @@ const TABS = [
   { path: '/m/survey', icon: '📡', label: 'SURVEY' },
   { path: '/m/assets', icon: '🏗️', label: 'ASSETS' },
   { path: '/m/wo',     icon: '🔧', label: 'MY WOs' },
+  { path: '/m/shutdown',icon: '⚡', label: 'SHUTDOWN' },
+  { path: '/m/patrol',   icon: '🚶', label: 'PATROL'   },
 ]
 
 export default function MobileShell({ children }) {

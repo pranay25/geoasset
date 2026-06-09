@@ -50,10 +50,7 @@ export const useAuthStore = create((set, get) => ({
     set({ user: null, profile: null, org: null })
   },
 
-  canSurvey: () => {
-    const r = get().profile?.role
-    return r === 'admin' || r === 'sdo' || r === 'je' || r === 'feeder_incharge'
-  },
+  canSurvey: () => true,  // All roles can survey and tag assets
 
   canManageUsers: () => {
     const r = get().profile?.role

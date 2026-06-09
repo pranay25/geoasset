@@ -16,7 +16,7 @@ export function FeedersPage() {
   const inp = "w-full bg-bg border border-bd rounded-xl px-3 py-2.5 text-sm text-tx focus:outline-none focus:border-a"
 
   function openNew() {
-    setForm({ code:'', name:'', voltage_kv:11, sanctioned_load_kva:'', ht_length_km:'', lt_length_km:'', source_substation:'', remarks:'' })
+    setForm({ code:'', name:'', voltage_kv:11, sanctioned_load_kva:'', ht_length_km:'', lt_length_km:'', source_substation:'', substation_name:'', remarks:'' })
   }
   function openEdit(f) { setForm({ ...f, _id: f.id }) }
 
@@ -136,8 +136,10 @@ export function FeedersPage() {
                   <input type="number" className={inp} value={form.lt_length_km||''} onChange={e=>setForm({...form,lt_length_km:e.target.value})} /></div>
                 <div><label className="text-[10px] text-mu block mb-1">Sanctioned Load (kVA)</label>
                   <input type="number" className={inp} value={form.sanctioned_load_kva||''} onChange={e=>setForm({...form,sanctioned_load_kva:e.target.value})} /></div>
-                <div><label className="text-[10px] text-mu block mb-1">Source GSS</label>
-                  <input className={inp} placeholder="33/11kV GSS" value={form.source_substation||''} onChange={e=>setForm({...form,source_substation:e.target.value})} /></div>
+                <div><label className="text-[10px] text-mu block mb-1">Source GSS / Substation</label>
+                  <input className={inp} placeholder="33/11kV GSS Jhalawar" value={form.source_substation||''} onChange={e=>setForm({...form,source_substation:e.target.value})} /></div>
+                <div><label className="text-[10px] text-mu block mb-1">Substation Name (for Shutdown sync)</label>
+                  <input className={inp} placeholder="GSS Jhalawar" value={form.substation_name||''} onChange={e=>setForm({...form,substation_name:e.target.value})} /></div>
               </div>
               <div><label className="text-[10px] text-mu block mb-1">Remarks</label>
                 <textarea className={inp} rows={2} value={form.remarks||''} onChange={e=>setForm({...form,remarks:e.target.value})} /></div>

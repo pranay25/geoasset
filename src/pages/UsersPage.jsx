@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useUserStore, useAuthStore, useUIStore } from '../store/index.js'
-import { usersApi } from '../api/client.js'
+import { usersApi, auditApi } from '../api/client.js'
 import { ROLES } from '../utils/constants.js'
 
 export default function UsersPage() {
@@ -26,6 +26,10 @@ export default function UsersPage() {
     try {
       const updated = await usersApi.toggleActive(u.id)
       update(u.id, updated)
+      await auditApi.log({ action: updated.is_active?'USER_ACTIVATED':'USER_DEACTIVATED',
+        category:'user', severity: updated.is_active?'info':'warn',
+        description:`User ${u.employee_id} (${u.name}) ${updated.is_active?'activated':'deactivated'}`,
+        meta: { employee_id:u.employee_id } })
       toast(`${updated.is_active?'✅ Activated':'🚫 Deactivated'}: ${u.name}`, 'ok')
     } catch(e) { toast(e.message,'err') }
   }
@@ -42,6 +46,9 @@ export default function UsersPage() {
           employee_id:form.employee_id.toUpperCase(), mobile:form.mobile, role:form.role,
           subdivision_id:form.subdivision_id||null })
         await fetch()
+        await auditApi.log({ action:'USER_CREATED', category:'user', severity:'info',
+          description:`User ${form.employee_id} (${form.name}) created with role ${form.role}`,
+          meta: { employee_id:form.employee_id, role:form.role } })
         toast(`✅ User ${form.employee_id} created`,'ok')
       } else {
         const { _new, _id, ...updates } = form

@@ -1,17 +1,17 @@
 import { useState, useRef, useEffect } from 'react'
+import { usePersistentSession } from '../hooks/usePersistentState.js'
 import { useAssetStore, useFeederStore, useAuthStore, useUIStore } from '../store/index.js'
-import { assetsApi } from '../api/client.js'
+import { assetsApi, nearbyApi, auditApi } from '../api/client.js'
 import { ASSET_TYPES, GPS_GOOD, GPS_OK, gpsColorClass } from '../utils/constants.js'
 
+// Only meter K.No. is manual — all other asset numbers are auto-generated
 const ASSET_FIELDS = {
   pole: [
-    { id:'number', label:'Pole Number', placeholder:'P-0247', required:true },
     { id:'pole_type', label:'Type', type:'select', options:['PCC','PSC','Wood','GI'] },
-    { id:'height_m', label:'Height (m)', type:'select', options:['7.5','9','11','13'] },
+    { id:'height_m', label:'Height', type:'select', options:['7.5m','9m','11m','13m'] },
     { id:'line_type', label:'Line Type', type:'select', options:['LT Line','HT 11kV','HT 33kV'] },
   ],
   dtr: [
-    { id:'number', label:'DTR Number', placeholder:'DTR-0142', required:true },
     { id:'capacity_kva', label:'Capacity (kVA)', type:'select', options:['25','63','100','160','200','250','315','400','500'] },
     { id:'voltage_ratio', label:'Voltage', type:'select', options:['11kV/433V','33kV/11kV'] },
     { id:'make', label:'Make / Year', placeholder:'BHEL/2021' },
@@ -19,7 +19,7 @@ const ASSET_FIELDS = {
     { id:'consumers_count', label:'Consumers', type:'number', placeholder:'48' },
   ],
   meter: [
-    { id:'k_number', label:'K. Number', placeholder:'K-00123456', required:true },
+    { id:'k_number', label:'K. Number (required)', placeholder:'K-00123456', required:true },
     { id:'consumer_name', label:'Consumer Name', placeholder:'Ram Prasad Meena' },
     { id:'category', label:'Category', type:'select', options:['DS','NS','AG','IP','LT_I','SL'] },
     { id:'meter_type', label:'Meter Type', type:'select', options:['Single Phase','Three Phase','Smart / AMI'] },
@@ -29,20 +29,42 @@ const ASSET_FIELDS = {
     { id:'last_payment_date', label:'Last Payment', type:'date' },
   ],
   line: [
-    { id:'from_pole', label:'From Pole', placeholder:'P-0247', required:true },
-    { id:'to_pole', label:'To Pole', placeholder:'P-0248', required:true },
+    { id:'from_pole', label:'From Pole No.', placeholder:'P-0247', required:true },
+    { id:'to_pole', label:'To Pole No.', placeholder:'P-0248', required:true },
     { id:'line_type', label:'Line Type', type:'select', options:['LT Line','HT 11kV','HT 33kV'] },
     { id:'conductor', label:'Conductor', type:'select', options:['ACSR Weasel','ACSR Dog','ACSR Rabbit','ACSR Panther'] },
     { id:'span_length_m', label:'Span (m)', type:'number', placeholder:'60' },
   ],
   pillar: [
-    { id:'unit_number', label:'Pillar Number', placeholder:'FP-012', required:true },
     { id:'unit_type', label:'Type', type:'select', options:['Feeder Pillar','Ring Main Unit','Distribution Box'] },
     { id:'outgoing_feeders', label:'Outgoing Feeders', type:'number', placeholder:'4' },
     { id:'rating_amps', label:'Rating (A)', type:'number', placeholder:'200' },
   ],
+  substation: [
+    { id:'substation_name', label:'Substation Name', placeholder:'33/11kV GSS Jhalawar', required:true },
+    { id:'capacity_mva', label:'Capacity (MVA)', type:'number', placeholder:'10' },
+    { id:'voltage_ratio', label:'Voltage Ratio', type:'select', options:['33/11kV','132/33kV','132/11kV','220/33kV','220/11kV','11/0.4kV'] },
+    { id:'num_feeders', label:'Number of Feeders', type:'number', placeholder:'8' },
+    { id:'num_consumers', label:'Number of Consumers', type:'number', placeholder:'5000' },
+    { id:'present_load_mva', label:'Present Load (MVA)', type:'number', placeholder:'6.5' },
+    { id:'switchgear_type', label:'Switchgear Type', type:'select', options:['Indoor','Outdoor','GIS','Hybrid'] },
+    { id:'num_vcb', label:'Number of VCBs', type:'number', placeholder:'12' },
+    { id:'num_pcb', label:'Number of PCBs', type:'number', placeholder:'4' },
+    { id:'village', label:'Village / Locality', placeholder:'Jhalawar' },
+    { id:'tehsil', label:'Tehsil', placeholder:'Jhalawar' },
+    { id:'jen_office', label:'JEN Office Name', placeholder:'JEN Office Jhalawar' },
+    { id:'subdivision_name', label:'Sub-Division', placeholder:'SD-03 Jhalawar' },
+    { id:'district', label:'District', placeholder:'Jhalawar' },
+  ],
+  linedp: [
+    { id:'dp_type', label:'DP Type', type:'select', options:['T-Off Point','Straight Junction','Corner Junction','4-Way Junction'] },
+    { id:'line_type', label:'Line Type', type:'select', options:['LT Line','HT 11kV','HT 33kV'] },
+    { id:'phase', label:'Phase', type:'select', options:['Single Phase','Three Phase'] },
+    { id:'connected_dtr', label:'Connected DTR', placeholder:'DTR-0142' },
+    { id:'num_outgoing', label:'No. of Outgoing', type:'number', placeholder:'3' },
+    { id:'conductor', label:'Conductor', type:'select', options:['ACSR Weasel','ACSR Dog','ACSR Rabbit','ACSR Panther'] },
+  ],
   iso: [
-    { id:'iso_number', label:'Isolator Number', placeholder:'ISO-0034', required:true },
     { id:'iso_type', label:'Type', type:'select', options:['Air Break Switch (ABS)','Drop Out Fuse (DOF)','Gang Operated','Ring Main Unit (RMU)'] },
     { id:'voltage_level', label:'Voltage', type:'select', options:['HT 11kV','HT 33kV','LT 433V'] },
     { id:'rating_amps', label:'Rating (A)', type:'number', placeholder:'200' },
@@ -53,22 +75,39 @@ const ASSET_FIELDS = {
 export default function SurveyPage() {
   const { assets, fetch: fetchAssets, add: addAsset } = useAssetStore()
   const { feeders } = useFeederStore()
-  const { profile, canSurvey } = useAuthStore()
+  const { profile } = useAuthStore()
   const { toast } = useUIStore()
 
-  const [gps, setGPS] = useState(null)
-  const [gpsAcc, setGpsAcc] = useState(null)
+  // ── Persistent survey session ─────────────────────────────────
+  // Survives tab switches, page refreshes, app restarts until saved/discarded
+  const { session: sv, setSession: setSv, clearSession, hasDraft } = usePersistentSession(
+    'geoasset_survey_draft',
+    { gps: null, gpsAcc: null, assetType: null, feederId: '', fields: {} }
+  )
+
+  // Derive from session
+  const gps        = sv.gps
+  const gpsAcc     = sv.gpsAcc
+  const assetType  = sv.assetType
+  const feederId   = sv.feederId
+  const fields     = sv.fields
+
+  // Local-only (no need to persist transient UI state)
   const [bestFix, setBestFix] = useState(null)
-  const [gpsState, setGpsState] = useState('standby') // standby|acquiring|locked|blocked
+  const [gpsState, setGpsState] = useState(gps ? 'locked' : 'standby')
   const [showInlineMap, setShowInlineMap] = useState(false)
   const [showManual, setShowManual] = useState(false)
   const [manLat, setManLat] = useState('')
   const [manLng, setManLng] = useState('')
-
-  const [assetType, setAssetType] = useState(null)
-  const [feederId, setFeederId] = useState('')
-  const [fields, setFields] = useState({})
   const [saving, setSaving] = useState(false)
+  const [nearbyModal, setNearbyModal] = useState(null)
+
+  // Setters that go through persistent session
+  const setGPS      = (v) => setSv({ gps: v })
+  const setGpsAcc   = (v) => setSv({ gpsAcc: v })
+  const setAssetType= (v) => setSv({ assetType: v, fields: {} })
+  const setFeederId = (v) => setSv({ feederId: v })
+  const setField    = (id, val) => setSv(s => ({ ...s, fields: { ...s.fields, [id]: val } }))
 
   const watchRef = useRef(null)
   const inlineMapRef = useRef(null)
@@ -111,8 +150,7 @@ export default function SurveyPage() {
 
   function lockGPS(fix) {
     stopWatch()
-    setGPS(fix)
-    setGpsAcc(fix.acc)
+    setSv({ gps: fix, gpsAcc: fix.acc })
     setGpsState('locked')
     toast(`📍 GPS locked ±${Math.round(fix.acc)}m`, 'ok')
   }
@@ -159,8 +197,7 @@ export default function SurveyPage() {
 
   function confirmInlinePin() {
     if (!inlineCoords) return toast('Tap on map to place pin', 'err')
-    setGPS({ ...inlineCoords, acc:8 })
-    setGpsAcc(8)
+    setSv({ gps: { ...inlineCoords, acc:8 }, gpsAcc: 8 })
     setGpsState('locked')
     setShowInlineMap(false)
     toast('📍 Location set from map', 'ok')
@@ -170,14 +207,12 @@ export default function SurveyPage() {
     const lat = parseFloat(manLat), lng = parseFloat(manLng)
     if (isNaN(lat)||isNaN(lng)) return toast('Enter valid coordinates', 'err')
     if (lat<6||lat>38||lng<68||lng>98) return toast('Coordinates outside India', 'err')
-    setGPS({ lat, lng, acc:15 }); setGpsAcc(15); setGpsState('locked')
+    setSv({ gps: { lat, lng, acc:15 }, gpsAcc: 15 }); setGpsState('locked')
     setShowManual(false)
     toast('📍 Manual coordinates set', 'ok')
   }
 
-  function setField(id, val) {
-    setFields(f => ({ ...f, [id]: val }))
-  }
+  // setField is now defined above as part of persistent session
 
   async function save() {
     if (!gps) return toast('Capture GPS first', 'err')
@@ -186,51 +221,152 @@ export default function SurveyPage() {
     const req = fDefs.find(f=>f.required && !fields[f.id])
     if (req) return toast(`${req.label} is required`, 'err')
 
+    // ── Nearby check (20m radius) ────────────────────────────
+    try {
+      const nearby = await nearbyApi.query(gps.lat, gps.lng, 20)
+      if (nearby.length > 0) {
+        setNearbyModal({ nearby, pendingPayload: { gps, assetType, feederId, fields } })
+        return  // pause — wait for user decision in modal
+      }
+    } catch(e) { console.warn('Nearby check failed:', e) }
+
+    await doSave(gps, assetType, feederId, fields, [])
+  }
+
+  async function doSave(gpsCoords, type, fdr, flds, replaceIds = []) {
     setSaving(true)
     try {
-      // Extract top-level columns from details, keep rest in JSONB
-      const { outstanding_amount, last_payment_date, mobile: mobileNum, ...detailsOnly } = fields
-      const name = fields.number||fields.k_number||fields.unit_number||fields.iso_number||`${assetType.toUpperCase()}-NEW`
+      // Delete replaced assets if resurveying
+      for (const id of replaceIds) {
+        await assetsApi.delete(id)
+        useAssetStore.getState().remove(id)
+      }
+      const { outstanding_amount, last_payment_date, mobile: mobileNum, _remarks, ...detailsOnly } = flds
+      const name = type==='meter'
+        ? flds.k_number
+        : type==='line'
+          ? (flds.from_pole||'?') + '→' + (flds.to_pole||'?')
+          : null
       const payload = {
-        asset_type: assetType,
-        name,
-        latitude: gps.lat,
-        longitude: gps.lng,
-        survey_accuracy_m: gps.acc,
-        feeder_id: feederId||null,
+        asset_type: type,
+        name: name || (type.toUpperCase() + '-TMP'),
+        latitude: gpsCoords.lat,
+        longitude: gpsCoords.lng,
+        survey_accuracy_m: gpsCoords.acc,
+        feeder_id: fdr||null,
         surveyed_by_id: profile?.id,
         details: detailsOnly,
-        outstanding_amount: assetType==='meter' ? (parseFloat(outstanding_amount)||0) : 0,
-        last_payment_date: assetType==='meter' ? (last_payment_date||null) : null,
-        mobile: assetType==='meter' ? (mobileNum||null) : null,
+        remarks: _remarks || null,
+        outstanding_amount: type==='meter' ? (parseFloat(outstanding_amount)||0) : 0,
+        last_payment_date: type==='meter' ? (last_payment_date||null) : null,
+        mobile: type==='meter' ? (mobileNum||null) : null,
       }
-      const saved = await assetsApi.create(payload)
+      let saved = await assetsApi.create(payload)
+      if (type !== 'meter' && type !== 'line' && saved.asset_code) {
+        saved = await assetsApi.update(saved.id, { name: saved.asset_code })
+      }
       addAsset(saved)
-      toast(`✅ ${saved.asset_code} saved`, 'ok')
-      // Reset form
-      setGPS(null); setGpsAcc(null); setGpsState('standby'); setBestFix(null)
-      setAssetType(null); setFields({}); setFeederId('')
+      await auditApi.log({
+        action: replaceIds.length ? 'RESURVEY' : 'SURVEY',
+        category: 'survey',
+        severity: replaceIds.length ? 'warn' : 'info',
+        description: replaceIds.length
+          ? `Resurveyed: ${saved.asset_code} replaced ${replaceIds.length} previous asset(s)`
+          : `New asset surveyed: ${saved.asset_code} (${type})`,
+        meta: { asset_id: saved.id, asset_code: saved.asset_code, asset_type: type,
+          lat: gpsCoords.lat, lng: gpsCoords.lng, replaced_ids: replaceIds },
+      })
+      toast('✅ ' + saved.asset_code + ' saved', 'ok')
+      clearSession()
+      setGpsState('standby'); setBestFix(null)
+      setNearbyModal(null)
     } catch(err) {
       toast(err.message, 'err')
     } finally { setSaving(false) }
   }
 
-  if (!canSurvey()) return (
-    <div className="h-full flex items-center justify-center">
-      <div className="text-center text-mu">
-        <div className="text-4xl mb-3">🚫</div>
-        <div>AO role cannot access Survey</div>
-      </div>
-    </div>
-  )
+
+  // All roles can survey assets
 
   const gpsCol = gps ? gpsColorClass(gpsAcc||99) : '#4e7090'
+
+  // Nearby assets confirmation modal
+  if (nearbyModal) {
+    const { nearby, pendingPayload: pp } = nearbyModal
+    return (
+      <div className="h-full flex flex-col p-4">
+        <div className="flex-1 flex flex-col justify-center">
+          <div className="text-center mb-6">
+            <div className="text-5xl mb-3">⚠️</div>
+            <div className="font-rajdhani font-bold text-xl text-amber-400">Assets Nearby!</div>
+            <div className="text-mu text-sm mt-1">Found {nearby.length} asset(s) within 20 metres</div>
+          </div>
+          <div className="bg-sf border border-amber-500/30 rounded-2xl p-4 mb-4 space-y-2 max-h-60 overflow-y-auto">
+            {nearby.map(a => (
+              <div key={a.id} className="flex items-center gap-3 py-2 border-b border-bd/50">
+                <span className="text-xl">{ASSET_TYPES[a.asset_type]?.icon}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="font-bold text-sm">{a.name}</div>
+                  <div className="text-[10px] text-mu">{ASSET_TYPES[a.asset_type]?.label} · {a.asset_code}</div>
+                  <div className="font-mono text-[10px] text-a">{parseFloat(a.latitude).toFixed(5)}°N, {parseFloat(a.longitude).toFixed(5)}°E</div>
+                </div>
+                <div className="text-right flex-shrink-0">
+                  <div className="font-mono font-bold text-sm text-amber-400">{a.distance_m}m</div>
+                  <div className="text-[9px] text-mu">away</div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="bg-bg border border-bd rounded-xl p-3 mb-4 text-xs text-mu">
+            <div className="font-bold text-tx mb-1">⚠️ This location already has surveyed assets.</div>
+            <div>If you proceed, the previous asset data will be <span className="text-red-400 font-bold">deleted and replaced</span> with new survey data.</div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <button onClick={() => {
+              auditApi.log({
+                action: 'RESURVEY_DECLINED', category: 'survey', severity: 'info',
+                description: `Resurvey declined at ${pp.gps.lat.toFixed(5)}, ${pp.gps.lng.toFixed(5)} — ${nearby.length} nearby asset(s) preserved`,
+                meta: { nearby_ids: nearby.map(a=>a.id), lat: pp.gps.lat, lng: pp.gps.lng },
+              })
+              setNearbyModal(null)
+            }}
+              className="py-4 rounded-2xl border-2 border-green-500/40 bg-green-500/10 font-rajdhani font-bold text-base text-green-400">
+              ✅ No — Keep Existing
+            </button>
+            <button onClick={() => {
+              setNearbyModal(null)
+              doSave(pp.gps, pp.assetType, pp.feederId, pp.fields, nearby.map(a=>a.id))
+            }}
+              className="py-4 rounded-2xl border-2 border-red-500/40 bg-red-500/10 font-rajdhani font-bold text-base text-red-400">
+              🔄 Yes — Resurvey
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="h-full overflow-y-auto pb-4">
       <div className="p-3 space-y-3">
 
-        {/* GPS Card */}
+        {/* Draft resume banner */}
+        {hasDraft && (
+          <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-3 flex items-center justify-between">
+            <div>
+              <div className="text-amber-400 font-bold text-xs">📋 Draft Survey In Progress</div>
+              <div className="text-[10px] text-mu mt-0.5">
+                {assetType ? `Type: ${assetType.toUpperCase()}` : 'GPS captured'} · Tap Save to complete or Discard to start fresh
+              </div>
+            </div>
+            <button onClick={() => { clearSession(); setGpsState('standby') }}
+              className="px-3 py-1.5 rounded-xl border border-red-500/30 text-red-400 text-[10px] font-bold flex-shrink-0">
+              🗑 Discard
+            </button>
+          </div>
+        )}
+
+      {/* GPS Card */}
         <div className="bg-sf border border-bd rounded-2xl p-4">
           <div className="flex items-center justify-between mb-3">
             <div className="text-a font-rajdhani font-bold text-xs tracking-widest">📡 LOCATION</div>
@@ -344,7 +480,7 @@ export default function SurveyPage() {
           <div className="text-a font-rajdhani font-bold text-xs tracking-widest mb-3">🏗️ ASSET TYPE</div>
           <div className="grid grid-cols-3 gap-2">
             {Object.entries(ASSET_TYPES).map(([type, cfg]) => (
-              <button key={type} onClick={()=>{ setAssetType(type); setFields({}) }}
+              <button key={type} onClick={()=>{ setAssetType(type) }}  /* setAssetType clears fields */
                 className={`py-3 px-2 rounded-xl border transition-all flex flex-col items-center gap-1
                   ${assetType===type ? 'border-a bg-a/10 text-a' : 'border-bd bg-bg text-mu hover:border-bd2'}`}>
                 <span className="text-xl">{cfg.icon}</span>
@@ -392,6 +528,12 @@ export default function SurveyPage() {
                   )}
                 </div>
               ))}
+              <div>
+                <label className="text-[10px] text-mu font-bold tracking-widest uppercase block mb-1">Remarks</label>
+                <textarea className="w-full bg-bg border border-bd rounded-xl px-3 py-2.5 text-sm text-tx focus:outline-none focus:border-a"
+                  rows={2} placeholder="Any additional observations…"
+                  value={fields['_remarks']||''} onChange={e=>setField('_remarks',e.target.value)} />
+              </div>
             </div>
           </div>
         )}

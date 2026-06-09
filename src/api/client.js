@@ -306,6 +306,246 @@ export const groupsApi = {
 }
 
 // ── Config ───────────────────────────────────────────────────
+// ── Patrol Reports API ───────────────────────────────────────
+export const patrolApi = {
+  async listReports() {
+    const { data, error } = await supabase.from('patrol_reports')
+      .select('*, feeders(code,name), profiles!patrolled_by_id(name,employee_id)')
+      .eq('org_id', _orgId).order('created_at', { ascending: false })
+    if (error) throw error
+    return data || []
+  },
+
+  async getReport(id) {
+    const { data: report, error } = await supabase.from('patrol_reports')
+      .select('*, feeders(code,name), profiles!patrolled_by_id(name,employee_id)')
+      .eq('id', id).single()
+    if (error) throw error
+    const { data: obs } = await supabase.from('patrol_observations')
+      .select('*').eq('patrol_id', id).order('seq_number')
+    return { ...report, observations: obs || [] }
+  },
+
+  async startPatrol(feederId, profileId) {
+    const seq = await supabase.rpc('next_counter', { p_org_id: _orgId, p_name: 'patrol' })
+    const report_number = 'PR-' + new Date().getFullYear() + '-' + String(seq.data).padStart(4,'0')
+    const { data, error } = await supabase.from('patrol_reports')
+      .insert({ org_id: _orgId, report_number, feeder_id: feederId,
+        patrolled_by_id: profileId, status: 'active' })
+      .select().single()
+    if (error) throw error
+    return data
+  },
+
+  async addObservation(patrolId, obs) {
+    const { data, error } = await supabase.from('patrol_observations')
+      .insert({ ...obs, org_id: _orgId, patrol_id: patrolId }).select().single()
+    if (error) throw error
+    // Flag the asset
+    if (obs.asset_id) {
+      await supabase.from('assets').update({
+        status: 'flag',
+        flag_note: obs.issue_type,
+        updated_at: new Date().toISOString(),
+      }).eq('id', obs.asset_id)
+    }
+    return data
+  },
+
+  async completePatrol(id, totalAssets, totalIssues, remarks) {
+    const { data, error } = await supabase.from('patrol_reports')
+      .update({ status: 'completed', end_time: new Date().toISOString(),
+        total_assets: totalAssets, total_issues: totalIssues, remarks: remarks || '' })
+      .eq('id', id).select().single()
+    if (error) throw error
+    return data
+  },
+}
+
+// ── Shutdown Alert API ───────────────────────────────────────
+export const shutdownApi = {
+  async list() {
+    const { data, error } = await supabase.from('shutdowns')
+      .select('*, feeders(code,name), profiles!posted_by_id(name,employee_id)')
+      .eq('org_id', _orgId)
+      .order('created_at', { ascending: false })
+      .limit(50)
+    if (error) throw error
+    return data || []
+  },
+
+  async listActive() {
+    const { data, error } = await supabase.from('shutdowns')
+      .select('*, feeders(code,name), profiles!posted_by_id(name,employee_id)')
+      .eq('org_id', _orgId).eq('status', 'active')
+      .order('created_at', { ascending: false })
+    if (error) throw error
+    return data || []
+  },
+
+  async create(payload) {
+    const { data, error } = await supabase.from('shutdowns')
+      .insert({ ...payload, org_id: _orgId }).select().single()
+    if (error) throw error
+    return data
+  },
+
+  async restore(id, note) {
+    const { data, error } = await supabase.from('shutdowns')
+      .update({
+        status: 'restored',
+        actual_restore: new Date().toISOString(),
+        restore_note: note || '',
+        updated_at: new Date().toISOString(),
+      }).eq('id', id).select().single()
+    if (error) throw error
+    return data
+  },
+
+  async acknowledge(id, userId) {
+    // Add userId to acknowledged_by array
+    const { data: current } = await supabase.from('shutdowns')
+      .select('acknowledged_by').eq('id', id).single()
+    const acked = current?.acknowledged_by || []
+    if (acked.includes(userId)) return
+    const { data, error } = await supabase.from('shutdowns')
+      .update({ acknowledged_by: [...acked, userId] })
+      .eq('id', id).select().single()
+    if (error) throw error
+    return data
+  },
+
+  // Subscribe to real-time shutdown events
+  subscribe(orgId, onInsert, onUpdate) {
+    return supabase.channel('shutdowns-' + orgId)
+      .on('postgres_changes', {
+        event: 'INSERT', schema: 'public', table: 'shutdowns',
+        filter: 'org_id=eq.' + orgId,
+      }, payload => onInsert(payload.new))
+      .on('postgres_changes', {
+        event: 'UPDATE', schema: 'public', table: 'shutdowns',
+        filter: 'org_id=eq.' + orgId,
+      }, payload => onUpdate(payload.new))
+      .subscribe()
+  },
+
+  unsubscribe(channel) {
+    if (channel) supabase.removeChannel(channel)
+  },
+
+  // Public — no auth needed
+  async getNearby(lat, lng, radiusKm = 15) {
+    const { data, error } = await supabase.rpc('get_nearby_shutdowns', {
+      user_lat: lat, user_lng: lng, radius_km: radiusKm
+    })
+    if (error) throw error
+    return Array.isArray(data) ? data : (data || [])
+  },
+}
+
+// ── Audit Log ────────────────────────────────────────────────
+export const auditApi = {
+  async log({ action, category, severity = 'info', description, meta = {} }) {
+    try {
+      await supabase.from('audit_log').insert({
+        org_id: _orgId,
+        user_id: (await supabase.auth.getUser()).data.user?.id,
+        action, category, severity, description,
+        meta: { ...meta, ts: new Date().toISOString() },
+      })
+    } catch(e) { console.warn('Audit log failed:', e.message) }
+  },
+
+  async list({ category, limit = 100 } = {}) {
+    let q = supabase.from('audit_log')
+      .select('*, profiles(name, employee_id, role)')
+      .eq('org_id', _orgId)
+      .order('created_at', { ascending: false })
+      .limit(limit)
+    if (category && category !== 'all') q = q.eq('category', category)
+    const { data, error } = await q
+    if (error) throw error
+    return data || []
+  },
+}
+
+// ── Nearby Assets ─────────────────────────────────────────────
+export const nearbyApi = {
+  async query(lat, lng, radiusM = 20) {
+    // Fetch all assets in org and filter client-side using haversine
+    // (PostGIS not guaranteed on all Supabase plans)
+    const { data, error } = await supabase.from('assets')
+      .select('id, name, asset_type, asset_code, latitude, longitude, status')
+      .eq('org_id', _orgId)
+    if (error) throw error
+    if (!data) return []
+
+    const R = 6371000
+    const toR = d => d * Math.PI / 180
+    return data
+      .map(a => {
+        const dLat = toR(parseFloat(a.latitude) - lat)
+        const dLng = toR(parseFloat(a.longitude) - lng)
+        const sinA = Math.sin(dLat/2), sinB = Math.sin(dLng/2)
+        const c = sinA*sinA + Math.cos(toR(lat))*Math.cos(toR(parseFloat(a.latitude)))*sinB*sinB
+        const dist = R * 2 * Math.atan2(Math.sqrt(c), Math.sqrt(1-c))
+        return { ...a, distance_m: Math.round(dist) }
+      })
+      .filter(a => a.distance_m <= radiusM)
+      .sort((a, b) => a.distance_m - b.distance_m)
+  },
+}
+
+// ── Hierarchy (Divisions + Subdivisions) ─────────────────────
+export const hierarchyApi = {
+  // Divisions
+  async listDivisions() {
+    const { data, error } = await supabase.from('divisions')
+      .select('*, subdivisions(*)').eq('org_id', _orgId).order('name')
+    if (error) throw error
+    return data || []
+  },
+  async createDivision(payload) {
+    const { data, error } = await supabase.from('divisions')
+      .insert({ ...payload, org_id: _orgId }).select().single()
+    if (error) throw error
+    return data
+  },
+  async updateDivision(id, updates) {
+    const { data, error } = await supabase.from('divisions')
+      .update(updates).eq('id', id).select().single()
+    if (error) throw error
+    return data
+  },
+  async deleteDivision(id) {
+    const { data: subs } = await supabase.from('subdivisions')
+      .select('id').eq('division_id', id).limit(1)
+    if (subs?.length) throw new Error('Cannot delete — subdivisions exist under this division')
+    const { error } = await supabase.from('divisions').delete().eq('id', id)
+    if (error) throw error
+  },
+  // Subdivisions
+  async createSubdivision(payload) {
+    const { data, error } = await supabase.from('subdivisions')
+      .insert({ ...payload, org_id: _orgId }).select().single()
+    if (error) throw error
+    return data
+  },
+  async updateSubdivision(id, updates) {
+    const { data, error } = await supabase.from('subdivisions')
+      .update(updates).eq('id', id).select().single()
+    if (error) throw error
+    return data
+  },
+  async deleteSubdivision(id) {
+    const { data: linked } = await supabase.from('feeders')
+      .select('id').eq('subdivision_id', id).limit(1)
+    if (linked?.length) throw new Error('Cannot delete — feeders linked to this subdivision')
+    const { error } = await supabase.from('subdivisions').delete().eq('id', id)
+    if (error) throw error
+  },
+}
+
 export const configApi = {
   async get(orgId) {
     const { data, error } = await supabase.from('organisations')

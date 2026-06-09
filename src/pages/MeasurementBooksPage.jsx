@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useMBStore, useWOStore, useFeederStore, useAssetStore, useAuthStore, useUIStore } from '../store/index.js'
-import { mbApi } from '../api/client.js'
+import { mbApi, auditApi } from '../api/client.js'
 import { STATUS_COLORS } from '../utils/constants.js'
 
 function generateMBPDF(mb, org) {
@@ -105,6 +105,9 @@ export default function MeasurementBooksPage() {
     try {
       const mb = await mbApi.create({ ...form, wo_id:form.wo_id||null, feeder_id:form.feeder_id||null, prepared_by_id:profile?.id })
       add(mb)
+      await auditApi.log({ action:'MB_CREATED', category:'mb', severity:'info',
+        description:`Measurement Book ${mb.mb_number} created: ${mb.title}`,
+        meta: { mb_number:mb.mb_number, total_amount:mb.total_amount } })
       toast(`✅ ${mb.mb_number} created`,'ok')
       setShowForm(false)
       setForm({ title:'', wo_id:'', contractor_name:'', feeder_id:'', items:[] })
@@ -114,6 +117,10 @@ export default function MeasurementBooksPage() {
   async function changeStatus(mb, status) {
     const updated = await mbApi.updateStatus(mb.id, status, profile?.id)
     update(mb.id, updated)
+    await auditApi.log({ action:'MB_STATUS_'+status.toUpperCase(), category:'mb',
+      severity: status==='rejected'?'warn':'info',
+      description:`MB ${mb.mb_number} ${status}`,
+      meta: { mb_number:mb.mb_number, status } })
     toast(status==='submitted'?'✅ Submitted':status==='approved'?'✅ Approved':'❌ Rejected', status==='rejected'?'warn':'ok')
   }
 

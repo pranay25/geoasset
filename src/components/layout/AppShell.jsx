@@ -3,13 +3,19 @@ import { useAuthStore, useUIStore, useAssetStore } from '../../store/index.js'
 import { ROLES, fmtOut } from '../../utils/constants.js'
 
 const TABS = [
-  { path: '/d/map',    icon: '🗺️',  label: 'MAP'     },
-  { path: '/d/survey', icon: '📡',  label: 'SURVEY'  },
-  { path: '/d/assets', icon: '🏗️', label: 'ASSETS'  },
-  { path: '/d/feeders',icon: '⚡',  label: 'FEEDERS' },
-  { path: '/d/wo',     icon: '🔧',  label: 'WOs'     },
-  { path: '/d/mb',     icon: '📋',  label: 'MB'      },
-  { path: '/d/users',  icon: '👥',  label: 'USERS'   },
+  { path: '/d/map',       icon: '🗺️',  label: 'MAP'      },
+  { path: '/d/survey',    icon: '📡',  label: 'SURVEY'   },
+  { path: '/d/assets',    icon: '🏗️', label: 'ASSETS'   },
+  { path: '/d/feeders',   icon: '⚡',  label: 'FEEDERS'  },
+  { path: '/d/wo',        icon: '🔧',  label: 'WOs'      },
+  { path: '/d/mb',        icon: '📋',  label: 'MB'       },
+  { path: '/d/export',    icon: '📤',  label: 'EXPORT'   },
+  { path: '/d/shutdown',  icon: '⚡',  label: 'SHUTDOWN' },
+  { path: '/d/patrol',    icon: '🚶', label: 'PATROL'   },
+  { path: '/d/hierarchy', icon: '🏛️', label: 'HIERARCHY', adminOnly: true },
+  { path: '/d/audit',     icon: '🔍', label: 'AUDIT LOG', adminOnly: true },
+  { path: '/d/sql',       icon: '🛢️', label: 'SQL',      adminOnly: true },
+  { path: '/d/users',     icon: '👥',  label: 'USERS',    adminOnly: true },
 ]
 
 export default function AppShell({ children }) {
@@ -19,7 +25,9 @@ export default function AppShell({ children }) {
   const { toasts } = useUIStore()
   const totalOut = useAssetStore(s => s.totalOutstanding())
 
-  const visibleTabs = TABS.filter(t => t.path !== '/users' || canManageUsers())
+  const visibleTabs = TABS.filter(t => !t.adminOnly || canManageUsers())
+  // We'll pass activeShutdownCount via a simple window global set by ShutdownAlertModal
+  // For now just show the tab
   const role = ROLES[profile?.role]
 
   return (

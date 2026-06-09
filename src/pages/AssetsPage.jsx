@@ -1,8 +1,9 @@
 // ─── AssetsPage ──────────────────────────────────────────────
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useAssetStore, useWOStore, useGroupStore, useAuthStore, useUIStore } from '../store/index.js'
-import { assetsApi, groupsApi } from '../api/client.js'
+import { assetsApi, groupsApi, auditApi } from '../api/client.js'
 import { ASSET_TYPES, STATUS_COLORS, fmtOut, outColor, waOpen, buildConsumerNotice, buildGroupMessage } from '../utils/constants.js'
+import AssetMapPanel from '../components/assets/AssetMapPanel.jsx'
 
 export function AssetsPage() {
   const { assets, fetch, update } = useAssetStore()
@@ -15,6 +16,9 @@ export function AssetsPage() {
   const [filter, setFilter] = useState('all')
   const [modal, setModal] = useState(null)
   const [showGroups, setShowGroups] = useState(false)
+  const [selected, setSelected] = useState(new Set())  // selected asset ids
+  const [selectionMode, setSelectionMode] = useState(false)
+  const [showMapPanel, setShowMapPanel] = useState(false)
 
   useEffect(() => { fetch(); fetchGroups() }, [])
 
@@ -38,6 +42,10 @@ export function AssetsPage() {
       const ns = a.status==='flag'?'ok':'flag'
       const updated = await assetsApi.update(a.id,{status:ns,flag_note:ns==='flag'?'Flagged':null})
       update(a.id,{status:ns,flag_note:updated.flag_note})
+      await auditApi.log({ action: ns==='flag'?'ASSET_FLAGGED':'ASSET_UNFLAGGED',
+        category:'asset', severity: ns==='flag'?'warn':'info',
+        description:`Asset ${a.asset_code||a.name} ${ns==='flag'?'flagged':'unflagged'}`,
+        meta: { asset_id:a.id, asset_code:a.asset_code, asset_type:a.asset_type } })
       toast(ns==='flag'?'🚩 Flagged':'✅ Unflagged','ok')
     } catch(e) { toast(e.message,'err') }
   }
@@ -71,7 +79,38 @@ export function AssetsPage() {
             </button>
           ))}
         </div>
-        <div className="text-[10px] text-mu font-mono">{filtered.length} assets</div>
+        <div className="flex items-center justify-between">
+          <div className="text-[10px] text-mu font-mono">{filtered.length} assets</div>
+          <div className="flex gap-2">
+            {selectionMode ? (
+              <>
+                <button onClick={()=>setSelected(new Set(filtered.map(a=>a.id)))}
+                  className="text-[10px] font-bold px-2 py-1 rounded-lg border border-a/30 text-a">
+                  Select All ({filtered.length})
+                </button>
+                <button onClick={()=>setSelected(new Set())}
+                  className="text-[10px] font-bold px-2 py-1 rounded-lg border border-bd text-mu">
+                  Clear
+                </button>
+                {selected.size > 0 && (
+                  <button onClick={()=>setShowMapPanel(true)}
+                    className="text-[10px] font-bold px-2 py-1 rounded-lg bg-a/10 border border-a/30 text-a">
+                    🗺️ Map ({selected.size})
+                  </button>
+                )}
+                <button onClick={()=>{ setSelectionMode(false); setSelected(new Set()) }}
+                  className="text-[10px] font-bold px-2 py-1 rounded-lg border border-red-500/30 text-red-400">
+                  ✕
+                </button>
+              </>
+            ) : (
+              <button onClick={()=>setSelectionMode(true)}
+                className="text-[10px] font-bold px-2 py-1 rounded-lg border border-bd text-mu hover:border-a hover:text-a transition-colors">
+                ☑ Select
+              </button>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* List */}
@@ -81,8 +120,15 @@ export function AssetsPage() {
           const out = a.outstanding_amount||0
           const hasWO = wos.some(w=>w.status!=='closed'&&(w.asset_ids||[]).includes(a.id))
           return (
-            <button key={a.id} onClick={()=>setModal(a)}
-              className="w-full flex items-center gap-3 p-3 rounded-xl mb-2 bg-sf border border-bd hover:border-bd2 text-left transition-colors">
+            <button key={a.id} onClick={()=>{
+              if (selectionMode) {
+                setSelected(s=>{ const n=new Set(s); n.has(a.id)?n.delete(a.id):n.add(a.id); return n })
+              } else { setModal(a) }
+            }}
+              className={`w-full flex items-center gap-3 p-3 rounded-xl mb-2 text-left transition-all
+                ${selectionMode && selected.has(a.id)
+                  ? 'bg-a/10 border-2 border-a'
+                  : 'bg-sf border border-bd hover:border-bd2'}`}>
               <div className="w-10 h-10 rounded-xl flex items-center justify-center text-lg flex-shrink-0"
                 style={{background:cfg?.bg||'rgba(100,100,100,.15)'}}>
                 {out>=10000?'₹':cfg?.icon}
@@ -98,12 +144,27 @@ export function AssetsPage() {
                   {a.details?.category?` · ${a.details.category}`:''}
                 </div>
               </div>
-              <div className={`w-2 h-2 rounded-full flex-shrink-0`}
-                style={{background:STATUS_COLORS[a.status]||'#888'}} />
+              {selectionMode ? (
+                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 text-[10px] font-bold
+                  ${selected.has(a.id) ? 'bg-a border-a text-bg' : 'border-mu'}`}>
+                  {selected.has(a.id) && '✓'}
+                </div>
+              ) : (
+                <div className="w-2 h-2 rounded-full flex-shrink-0"
+                  style={{background:STATUS_COLORS[a.status]||'#888'}} />
+              )}
             </button>
           )
         })}
       </div>
+
+      {/* Map Panel for selected assets */}
+      {showMapPanel && (
+        <AssetMapPanel
+          assets={filtered.filter(a=>selected.has(a.id))}
+          org={org}
+          onClose={()=>setShowMapPanel(false)} />
+      )}
 
       {/* Asset Modal */}
       {modal && (
