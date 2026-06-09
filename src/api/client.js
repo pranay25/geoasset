@@ -114,6 +114,9 @@ export const assetsApi = {
     return data
   },
   async delete(id) {
+    // First nullify any patrol_observations that reference this asset
+    await supabase.from('patrol_observations')
+      .update({ asset_id: null }).eq('asset_id', id)
     const { error } = await supabase.from('assets').delete().eq('id', id)
     if (error) throw error
   },

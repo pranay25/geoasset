@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { usePersistentSession } from '../../hooks/usePersistentState.js'
 import { useNavigate } from 'react-router-dom'
 import { useAssetStore, useFeederStore, useAuthStore, useUIStore } from '../../store/index.js'
@@ -230,52 +230,102 @@ export default function MobileSurveyPage() {
   // ── Nearby modal ─────────────────────────────────────────
   if (nearbyModal) {
     const { nearby, pendingPayload: pp } = nearbyModal
+    const [nearbyChoice, setNearbyChoice] = useState('new') // 'new' | assetId
+    const chosenAsset = nearbyChoice !== 'new' ? nearby.find(a=>a.id===nearbyChoice) : null
+
     return (
-      <div className="h-full flex flex-col p-5 justify-center">
-        <div className="text-center mb-6">
-          <div className="text-6xl mb-3">⚠️</div>
-          <div className="font-rajdhani font-bold text-2xl text-amber-400">Assets Nearby!</div>
-          <div className="text-mu text-sm mt-2">Found {nearby.length} asset(s) within 20 metres of this location</div>
+      <div className="h-full flex flex-col p-4">
+        <div className="text-center pt-4 mb-4">
+          <div className="text-5xl mb-2">ℹ️</div>
+          <div className="font-rajdhani font-bold text-xl text-a">Assets Already Here</div>
+          <div className="text-mu text-sm mt-1">
+            {nearby.length} asset(s) surveyed within 20m of this location
+          </div>
         </div>
-        <div className="bg-sf border-2 border-amber-500/30 rounded-2xl p-4 mb-5 space-y-3 max-h-64 overflow-y-auto">
+
+        {/* Nearby list — info only */}
+        <div className="bg-sf border border-bd rounded-2xl p-3 mb-4 space-y-2 max-h-48 overflow-y-auto flex-shrink-0">
           {nearby.map(a => (
-            <div key={a.id} className="flex items-center gap-3">
-              <span className="text-2xl">{ASSET_TYPES[a.asset_type]?.icon}</span>
+            <div key={a.id} className="flex items-center gap-3 py-1">
+              <span className="text-xl flex-shrink-0">{ASSET_TYPES[a.asset_type]?.icon}</span>
               <div className="flex-1 min-w-0">
-                <div className="font-bold text-base">{a.name}</div>
-                <div className="text-xs text-mu">{ASSET_TYPES[a.asset_type]?.label} · {a.asset_code}</div>
-                <div className="font-mono text-xs text-a mt-0.5">
-                  {parseFloat(a.latitude).toFixed(5)}°N, {parseFloat(a.longitude).toFixed(5)}°E
-                </div>
+                <div className="font-bold text-sm">{a.name}</div>
+                <div className="text-[10px] text-mu">{ASSET_TYPES[a.asset_type]?.label} · {a.asset_code}</div>
+                <div className="font-mono text-[10px] text-a">{parseFloat(a.latitude).toFixed(5)}°N · {parseFloat(a.longitude).toFixed(5)}°E</div>
               </div>
               <div className="text-right flex-shrink-0">
-                <div className="font-mono font-bold text-lg text-amber-400">{a.distance_m}m</div>
-                <div className="text-[9px] text-mu">away</div>
+                <div className="font-mono font-bold text-base text-amber-400">{a.distance_m}m</div>
               </div>
             </div>
           ))}
         </div>
-        <div className="bg-red-500/10 border border-red-500/30 rounded-2xl p-4 mb-6 text-sm text-red-300">
-          ⚠️ Proceeding will <strong>delete and replace</strong> the existing asset data with your new survey.
+
+        {/* Question */}
+        <div className="font-rajdhani font-bold text-sm text-tx mb-3 flex-shrink-0">
+          What are you surveying?
         </div>
-        <div className="grid grid-cols-2 gap-4">
-          <button
-            onClick={() => {
-              auditApi.log({ action:'RESURVEY_DECLINED', category:'survey', severity:'info',
-                description:`Resurvey declined — ${nearby.length} nearby asset(s) preserved`,
-                meta: { nearby_ids: nearby.map(a=>a.id) } })
-              setNearbyModal(null)
-            }}
-            className="py-5 rounded-2xl border-2 border-green-500/50 bg-green-500/10 font-rajdhani font-bold text-lg text-green-400">
-            ✅ No<br/><span className="text-sm font-normal">Keep Existing</span>
+
+        {/* Choice buttons */}
+        <div className="space-y-2 flex-1 overflow-y-auto">
+          {/* Option A — New asset */}
+          <button onClick={() => setNearbyChoice('new')}
+            className={`w-full p-4 rounded-2xl border-2 text-left transition-all
+              ${nearbyChoice==='new' ? 'border-a bg-a/10' : 'border-bd bg-sf'}`}>
+            <div className={`font-bold text-base ${nearbyChoice==='new'?'text-a':'text-tx'}`}>
+              ✨ A NEW asset at this location
+            </div>
+            <div className="text-xs text-mu mt-1">
+              e.g. a meter near an existing pole — both will coexist
+            </div>
           </button>
-          <button
-            onClick={() => {
-              setNearbyModal(null)
-              doSave(pp.gps, pp.assetType, pp.feederId, pp.fields, nearby.map(a=>a.id))
-            }}
-            className="py-5 rounded-2xl border-2 border-red-500/50 bg-red-500/10 font-rajdhani font-bold text-lg text-red-400">
-            🔄 Yes<br/><span className="text-sm font-normal">Resurvey</span>
+
+          {/* Option B — Update an existing asset */}
+          {nearby.map(a => {
+            const cfg = ASSET_TYPES[a.asset_type]
+            const isChosen = nearbyChoice === a.id
+            return (
+              <button key={a.id} onClick={() => setNearbyChoice(a.id)}
+                className={`w-full p-4 rounded-2xl border-2 text-left transition-all
+                  ${isChosen ? 'border-amber-500 bg-amber-500/10' : 'border-bd bg-sf'}`}>
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl flex-shrink-0">{cfg?.icon}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className={`font-bold text-base ${isChosen?'text-amber-400':'text-tx'}`}>
+                      🔄 Update: {a.name}
+                    </div>
+                    <div className="text-xs text-mu">{cfg?.label} · {a.asset_code} · {a.distance_m}m away</div>
+                    <div className="text-[10px] text-red-400 mt-1">
+                      ⚠️ This will replace the existing survey data for this asset
+                    </div>
+                  </div>
+                </div>
+              </button>
+            )
+          })}
+        </div>
+
+        {/* Action buttons */}
+        <div className="flex gap-3 mt-4 flex-shrink-0">
+          <button onClick={() => setNearbyModal(null)}
+            className="px-5 py-4 rounded-2xl border border-bd text-mu font-rajdhani font-bold">
+            ← Back
+          </button>
+          <button onClick={() => {
+            setNearbyModal(null)
+            if (nearbyChoice === 'new') {
+              // Proceed normally — no deletion
+              doSave(pp.gps, pp.assetType, pp.feederId, pp.fields, [])
+            } else {
+              // Delete chosen asset only, then save new
+              auditApi.log({ action:'RESURVEY', category:'survey', severity:'warn',
+                description:`Asset ${chosenAsset?.asset_code} resurveyed by user choice`,
+                meta: { replaced_id: nearbyChoice, nearby_count: nearby.length } })
+              doSave(pp.gps, pp.assetType, pp.feederId, pp.fields, [nearbyChoice])
+            }
+          }}
+            className="flex-1 py-4 rounded-2xl font-rajdhani font-bold text-lg"
+            style={{background:'linear-gradient(135deg,#00d4ff,#3b82f6)',color:'#07101e'}}>
+            {nearbyChoice==='new' ? '✨ Add New Asset' : '🔄 Update & Replace'}
           </button>
         </div>
       </div>

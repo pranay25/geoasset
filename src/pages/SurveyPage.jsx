@@ -1,7 +1,8 @@
-import { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { usePersistentSession } from '../hooks/usePersistentState.js'
 import { useAssetStore, useFeederStore, useAuthStore, useUIStore } from '../store/index.js'
 import { assetsApi, nearbyApi, auditApi } from '../api/client.js'
+import NearbyChoiceModal from '../components/survey/NearbyChoiceModal.jsx'
 import { ASSET_TYPES, GPS_GOOD, GPS_OK, gpsColorClass } from '../utils/constants.js'
 
 // Only meter K.No. is manual — all other asset numbers are auto-generated
@@ -290,59 +291,18 @@ export default function SurveyPage() {
 
   const gpsCol = gps ? gpsColorClass(gpsAcc||99) : '#4e7090'
 
-  // Nearby assets confirmation modal
+  // Nearby assets — new correct logic
   if (nearbyModal) {
     const { nearby, pendingPayload: pp } = nearbyModal
     return (
-      <div className="h-full flex flex-col p-4">
-        <div className="flex-1 flex flex-col justify-center">
-          <div className="text-center mb-6">
-            <div className="text-5xl mb-3">⚠️</div>
-            <div className="font-rajdhani font-bold text-xl text-amber-400">Assets Nearby!</div>
-            <div className="text-mu text-sm mt-1">Found {nearby.length} asset(s) within 20 metres</div>
-          </div>
-          <div className="bg-sf border border-amber-500/30 rounded-2xl p-4 mb-4 space-y-2 max-h-60 overflow-y-auto">
-            {nearby.map(a => (
-              <div key={a.id} className="flex items-center gap-3 py-2 border-b border-bd/50">
-                <span className="text-xl">{ASSET_TYPES[a.asset_type]?.icon}</span>
-                <div className="flex-1 min-w-0">
-                  <div className="font-bold text-sm">{a.name}</div>
-                  <div className="text-[10px] text-mu">{ASSET_TYPES[a.asset_type]?.label} · {a.asset_code}</div>
-                  <div className="font-mono text-[10px] text-a">{parseFloat(a.latitude).toFixed(5)}°N, {parseFloat(a.longitude).toFixed(5)}°E</div>
-                </div>
-                <div className="text-right flex-shrink-0">
-                  <div className="font-mono font-bold text-sm text-amber-400">{a.distance_m}m</div>
-                  <div className="text-[9px] text-mu">away</div>
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="bg-bg border border-bd rounded-xl p-3 mb-4 text-xs text-mu">
-            <div className="font-bold text-tx mb-1">⚠️ This location already has surveyed assets.</div>
-            <div>If you proceed, the previous asset data will be <span className="text-red-400 font-bold">deleted and replaced</span> with new survey data.</div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <button onClick={() => {
-              auditApi.log({
-                action: 'RESURVEY_DECLINED', category: 'survey', severity: 'info',
-                description: `Resurvey declined at ${pp.gps.lat.toFixed(5)}, ${pp.gps.lng.toFixed(5)} — ${nearby.length} nearby asset(s) preserved`,
-                meta: { nearby_ids: nearby.map(a=>a.id), lat: pp.gps.lat, lng: pp.gps.lng },
-              })
-              setNearbyModal(null)
-            }}
-              className="py-4 rounded-2xl border-2 border-green-500/40 bg-green-500/10 font-rajdhani font-bold text-base text-green-400">
-              ✅ No — Keep Existing
-            </button>
-            <button onClick={() => {
-              setNearbyModal(null)
-              doSave(pp.gps, pp.assetType, pp.feederId, pp.fields, nearby.map(a=>a.id))
-            }}
-              className="py-4 rounded-2xl border-2 border-red-500/40 bg-red-500/10 font-rajdhani font-bold text-base text-red-400">
-              🔄 Yes — Resurvey
-            </button>
-          </div>
-        </div>
-      </div>
+      <NearbyChoiceModal
+        nearby={nearby}
+        pendingPayload={pp}
+        assets={assets}
+        onCancel={() => setNearbyModal(null)}
+        onProceed={(replaceIds) => { setNearbyModal(null); doSave(pp.gps, pp.assetType, pp.feederId, pp.fields, replaceIds) }}
+        auditApi={auditApi}
+      />
     )
   }
 

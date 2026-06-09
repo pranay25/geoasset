@@ -75,8 +75,9 @@ export default function PatrolPage() {
     { mode: 'list', activeReport: null, observations: [], selectedFeeder: '' }
   )
 
-  const mode           = ps.mode || 'list'
-  const activeReport   = ps.activeReport
+  // Always start in 'list' — resume banner handles getting back to active
+  const mode           = ps.mode === 'active' || ps.mode === 'complete' ? ps.mode : (ps.mode || 'list')
+  const activeReport   = ps.activeReport || null
   const observations   = ps.observations || []
   const selectedFeeder = ps.selectedFeeder || ''
   const setMode            = (v) => setPs({ mode: v })
@@ -165,7 +166,8 @@ export default function PatrolPage() {
   }
 
   async function captureLocation() {
-    if (!gps) return toast('Wait for GPS lock', 'err')
+    if (!gps) return toast('Walk outside for GPS lock', 'err')
+    if (!activeReport?.id) return toast('No active patrol — start one first', 'err')
     // Query nearby assets on this feeder within 30m
     try {
       const allNearby = await nearbyApi.query(gps.lat, gps.lng, 30)
@@ -196,6 +198,7 @@ export default function PatrolPage() {
     try {
       const asset = assets.find(a => a.id === selAsset)
       const issue = issueOptions.find(i => i.id === selIssue)
+      if (!activeReport?.id) return toast('Patrol session lost — please restart patrol', 'err')
       const obs = await patrolApi.addObservation(activeReport.id, {
         asset_id: selAsset,
         asset_code: asset?.asset_code,
@@ -396,6 +399,13 @@ export default function PatrolPage() {
 
   const inp = "w-full bg-bg border border-bd rounded-xl px-3 py-2.5 text-sm text-tx focus:outline-none focus:border-a"
 
+  // Guard: if mode=active but no activeReport, reset to list
+  useEffect(() => {
+    if ((mode === 'active' || mode === 'complete') && !activeReport) {
+      clearPatrol()
+    }
+  }, [mode, activeReport])
+
   // ── LIST MODE ───────────────────────────────────────────────
   if (mode === 'list') return (
     <div className="h-full flex flex-col">
@@ -546,6 +556,7 @@ export default function PatrolPage() {
             </div>
           )}
           {observations.map((o, i) => {
+            if (!o) return null
             const sev = SEV_CONFIG[o.severity] || SEV_CONFIG.medium
             const cfg = ASSET_TYPES[o.asset_type]
             return (

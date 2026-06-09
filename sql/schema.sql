@@ -467,3 +467,12 @@ $$;
 -- Allow public (anon) to call this function
 GRANT EXECUTE ON FUNCTION get_nearby_shutdowns TO anon;
 GRANT EXECUTE ON FUNCTION get_nearby_shutdowns TO authenticated;
+
+
+-- Fix foreign key to allow asset deletion (SET NULL instead of restrict)
+ALTER TABLE patrol_observations
+  DROP CONSTRAINT IF EXISTS patrol_observations_asset_id_fkey;
+
+ALTER TABLE patrol_observations
+  ADD CONSTRAINT patrol_observations_asset_id_fkey
+  FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE SET NULL;
