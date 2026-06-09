@@ -87,6 +87,7 @@ export default function MobileSurveyPage() {
   const [gpsState, setGpsState] = useState(gps ? 'locked' : 'idle')
   const [saving, setSaving] = useState(false)
   const [nearbyModal, setNearbyModal] = useState(null)
+  const [nearbyChoice, setNearbyChoice] = useState('new')
   const [showMapPicker, setShowMapPicker] = useState(false)
   const mapPickerRef = useRef(null)
   const lmapRef = useRef(null)
@@ -175,7 +176,8 @@ export default function MobileSurveyPage() {
     try {
       const nearby = await nearbyApi.query(gps.lat, gps.lng, 20)
       if (nearby.length > 0) {
-        setNearbyModal({ nearby, pendingPayload: { gps, assetType, feederId, fields } })
+        setNearbyChoice('new')
+      setNearbyModal({ nearby, pendingPayload: { gps, assetType, feederId, fields } })
         return
       }
     } catch(e) { console.warn('Nearby check:', e) }
@@ -232,7 +234,6 @@ export default function MobileSurveyPage() {
   // ── Nearby modal ─────────────────────────────────────────
   if (nearbyModal) {
     const { nearby, pendingPayload: pp } = nearbyModal
-    const [nearbyChoice, setNearbyChoice] = useState('new') // 'new' | assetId
     const chosenAsset = nearbyChoice !== 'new' ? nearby.find(a=>a.id===nearbyChoice) : null
 
     return (
