@@ -53,21 +53,34 @@ export const authApi = {
       email: adminUser.email,
       password: adminUser.password,
     })
-    if (authErr) throw new Error(authErr.message)
-    if (!authData.user) throw new Error('Signup failed — check Supabase Auth settings')
-    const userId = authData.user.id
 
-    // Step 2: Sign in to get session
-    // REQUIRES: Supabase → Auth → Providers → Email → "Confirm email" = OFF
-    const { data: signInData, error: signInErr } = await supabase.auth.signInWithPassword({
-      email: adminUser.email,
-      password: adminUser.password,
-    })
-    if (signInErr || !signInData?.session) {
-      throw new Error('Could not sign in after signup. Go to Supabase → Authentication → Providers → Email → turn OFF "Confirm email" → then try again.')
+    // 422 = email already exists — try signing in directly instead
+    let userId
+    if (authErr && (authErr.status === 422 || authErr.message?.includes('already'))) {
+      const { data: existing, error: existErr } = await supabase.auth.signInWithPassword({
+        email: adminUser.email, password: adminUser.password,
+      })
+      if (existErr) throw new Error('Email already registered with a different password. Delete the user in Supabase Auth and try again.')
+      userId = existing.user?.id
+      if (!userId) throw new Error('Could not retrieve user ID')
+      // Check if profile already exists
+      const { data: existingProfile } = await supabase.from('profiles').select('id').eq('id', userId).single()
+      if (existingProfile) throw new Error('This account is already set up. Please login instead.')
+    } else {
+      if (authErr) throw new Error(authErr.message)
+      if (!authData?.user) throw new Error('Signup failed — no user returned')
+      userId = authData.user.id
+
+      // Sign in to get session
+      const { data: signInData, error: signInErr } = await supabase.auth.signInWithPassword({
+        email: adminUser.email, password: adminUser.password,
+      })
+      if (signInErr || !signInData?.session) {
+        throw new Error('Login after signup failed. Go to Supabase → Authentication → Providers → Email → turn OFF "Confirm email" → then try again.')
+      }
     }
 
-    // Step 3: Call setup RPC — SECURITY DEFINER creates everything atomically
+    // Step 2: Call setup RPC — creates org, divisions, subdivisions, profile, counters
     const { data: result, error: rpcErr } = await supabase.rpc('setup_organisation', {
       p_org_name:     org.name,
       p_circle:       org.circle || '',
