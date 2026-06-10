@@ -44,30 +44,32 @@ export const authApi = {
     return { ...profile, organisations: org, subdivisions: subdiv }
   },
   async setup({ org, adminUser }) {
-    // Step 1: Create auth user
+    // Step 1: Sign up
     const { data: authData, error: authErr } = await supabase.auth.signUp({
       email: adminUser.email,
       password: adminUser.password,
-      options: { emailRedirectTo: window.location.origin }
     })
     if (authErr) throw new Error(authErr.message)
+    if (!authData.user) throw new Error('Signup failed — check Supabase Auth settings')
     const userId = authData.user.id
 
-    // Step 2: Sign in immediately to get a valid session for RPC call
-    const { error: signInErr } = await supabase.auth.signInWithPassword({
+    // Step 2: Sign in to get session
+    // REQUIRES: Supabase → Auth → Providers → Email → "Confirm email" = OFF
+    const { data: signInData, error: signInErr } = await supabase.auth.signInWithPassword({
       email: adminUser.email,
       password: adminUser.password,
     })
-    if (signInErr) throw new Error('Could not sign in after signup — make sure "Confirm email" is DISABLED in Supabase → Auth → Providers → Email')
+    if (signInErr || !signInData?.session) {
+      throw new Error('Could not sign in after signup. Go to Supabase → Authentication → Providers → Email → turn OFF "Confirm email" → then try again.')
+    }
 
-    // Step 3: Call SECURITY DEFINER function — bypasses RLS entirely
-    // This creates org + subdivisions + profile atomically in one SQL transaction
+    // Step 3: Call setup RPC — SECURITY DEFINER creates everything atomically
     const { data: result, error: rpcErr } = await supabase.rpc('setup_organisation', {
       p_org_name:     org.name,
       p_circle:       org.circle || '',
       p_division:     org.division,
       p_city:         org.city,
-      p_state:        org.state,
+      p_state:        org.state || 'Rajasthan',
       p_lat:          parseFloat(org.lat) || 24.5963,
       p_lng:          parseFloat(org.lng) || 76.169,
       p_subdivisions: JSON.stringify(org.subdivisions || []),
@@ -77,7 +79,6 @@ export const authApi = {
       p_mobile:       adminUser.mobile || null,
     })
     if (rpcErr) throw new Error('Setup failed: ' + rpcErr.message)
-
     return { org_id: result.org_id, userId }
   },
 }
