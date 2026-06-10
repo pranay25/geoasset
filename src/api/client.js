@@ -26,22 +26,26 @@ export const authApi = {
     return data.session
   },
   async getProfile(userId) {
-    // Fetch separately to avoid join coercion errors
+    // Fetch profile
     const { data: profile, error: profErr } = await supabase
       .from('profiles').select('*').eq('id', userId).single()
     if (profErr) throw new Error(profErr.message)
+    if (!profile) throw new Error('Profile not found')
 
-    const { data: org } = await supabase
-      .from('organisations').select('*').eq('id', profile.org_id).single()
+    // Fetch org — use maybeSingle to avoid coercion error
+    const { data: orgData } = await supabase
+      .from('organisations').select('*').eq('id', profile.org_id).limit(1)
+    const org = Array.isArray(orgData) ? orgData[0] : orgData
 
+    // Fetch subdivision if set
     let subdiv = null
     if (profile.subdivision_id) {
-      const { data: sd } = await supabase
-        .from('subdivisions').select('code,name').eq('id', profile.subdivision_id).single()
-      subdiv = sd
+      const { data: sdData } = await supabase
+        .from('subdivisions').select('code,name').eq('id', profile.subdivision_id).limit(1)
+      subdiv = Array.isArray(sdData) ? sdData[0] : sdData
     }
 
-    return { ...profile, organisations: org, subdivisions: subdiv }
+    return { ...profile, organisations: org || null, subdivisions: subdiv }
   },
   async setup({ org, adminUser }) {
     // Step 1: Sign up
