@@ -6,7 +6,6 @@ export const ASSET_TYPES = {
   line:        { label: 'Line Span',      icon: '📏', color: '#3b82f6', bg: 'rgba(59,130,246,0.15)'  },
   pillar:      { label: 'Feeder Pillar',  icon: '🔐', color: '#a855f7', bg: 'rgba(168,85,247,0.15)'  },
   iso:         { label: 'Isolator',       icon: '🔴', color: '#f43f5e', bg: 'rgba(244,63,94,0.15)'   },
-  substation:  { label: 'Sub-Station',    icon: '🏭', color: '#06b6d4', bg: 'rgba(6,182,212,0.15)'   },
   linedp:      { label: 'Line DP',         icon: '🔀', color: '#84cc16', bg: 'rgba(132,204,22,0.15)'   },
 }
 

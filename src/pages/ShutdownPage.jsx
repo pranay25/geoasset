@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
-import { useFeederStore, useAssetStore, useAuthStore, useUIStore } from '../store/index.js'
+import { useFeederStore, useAssetStore, useSubstationStore, useAuthStore, useUIStore } from '../store/index.js'
 import { shutdownApi, auditApi } from '../api/client.js'
 
 export default function ShutdownPage() {
   const { feeders, fetch: fetchFeeders } = useFeederStore()
   const { assets } = useAssetStore()
+  const { substations, fetch: fetchSubstations } = useSubstationStore()
   const { profile, org } = useAuthStore()
   const { toast } = useUIStore()
 
@@ -16,12 +17,13 @@ export default function ShutdownPage() {
 
   // Form state
   const [form, setForm] = useState({
-    substation_name: '', feeder_id: '', shutdown_type: 'planned',
+    substation_id: '', feeder_id: '', shutdown_type: 'planned',
     reason: '', estimated_restore: '',
   })
 
   useEffect(() => {
     fetchFeeders()
+    fetchSubstations()
     loadShutdowns()
   }, [])
 
@@ -35,42 +37,38 @@ export default function ShutdownPage() {
   }
 
   // Get unique substation names from feeders
-  const substations = [...new Set(
-    feeders.filter(f => f.substation_name).map(f => f.substation_name)
-  )]
+  // substations comes from useSubstationStore — proper entities
 
   // Get feeders for selected substation
-  const relatedFeeders = form.substation_name
-    ? feeders.filter(f => f.substation_name === form.substation_name)
+  const relatedFeeders = form.substation_id
+    ? feeders.filter(f => f.substation_id === form.substation_id)
     : []
+  const feederOptions = relatedFeeders.length > 0 ? relatedFeeders : feeders
 
   async function postShutdown() {
-    if (!form.substation_name) return toast('Select substation', 'err')
+    if (!form.substation_id) return toast('Select substation', 'err')
     if (!form.reason) return toast('Enter shutdown reason', 'err')
     setSaving(true)
     try {
-      const affected = relatedFeeders.map(f => f.id)
-      // Find substation asset to get GPS coordinates for public board
-      const substationAsset = assets.find(a =>
-        a.asset_type === 'substation' &&
-        (a.details?.substation_name === form.substation_name || a.name === form.substation_name)
-      )
+      const affected = form.feeder_id ? [form.feeder_id] : relatedFeeders.map(f => f.id)
+          // Get substation record for GPS coords
+      const substationRecord = substations.find(s => s.id === form.substation_id)
       const sd = await shutdownApi.create({
-        substation_name: form.substation_name,
-        feeder_id: form.feeder_id || null,
+        substation_id: form.substation_id || null,
+        substation_name: substationRecord?.name || form.substation_name || 'Unknown',
         shutdown_type: form.shutdown_type,
         reason: form.reason,
         estimated_restore: form.estimated_restore ? new Date(form.estimated_restore).toISOString() : null,
         affected_feeders: affected,
         posted_by_id: profile?.id,
         status: 'active',
-        substation_lat: substationAsset ? parseFloat(substationAsset.latitude) : (org?.lat || null),
-        substation_lng: substationAsset ? parseFloat(substationAsset.longitude) : (org?.lng || null),
+        substation_lat: substationRecord?.latitude || org?.lat || null,
+        substation_lng: substationRecord?.longitude || org?.lng || null,
       })
       setShutdowns(prev => [{ ...sd, feeders: feeders.find(f=>f.id===form.feeder_id), profiles: profile }, ...prev])
       await auditApi.log({
         action: 'SHUTDOWN_POSTED', category: 'system', severity: 'critical',
-        description: `Shutdown posted: ${form.substation_name} — ${form.reason}`,
+        description: `Shutdown posted: ${substations.find(s=>s.id===form.substation_id)?.name||'?'} — ${form.reason}`,
         meta: { substation: form.substation_name, affected_feeders: affected.length, type: form.shutdown_type },
       })
       toast('⚠️ Shutdown alert sent to all users', 'warn')
@@ -283,26 +281,24 @@ export default function ShutdownPage() {
               {/* Substation */}
               <div>
                 <label className="text-[10px] text-mu block mb-1.5">Substation *</label>
-                <select className={inp} value={form.substation_name}
-                  onChange={e => setForm({...form, substation_name:e.target.value, feeder_id:''})}>
+                <select className={inp} value={form.substation_id}
+                  onChange={e => setForm({...form, substation_id:e.target.value, feeder_id:''})}>
                   <option value="">Select substation…</option>
-                  {substations.map(s => <option key={s}>{s}</option>)}
-                  <option value="__custom__">Other (type below)</option>
+                  {substations.map(s => (
+                    <option key={s.id} value={s.id}>{s.code} — {s.name} ({s.voltage_ratio})</option>
+                  ))}
                 </select>
-                {form.substation_name === '__custom__' && (
-                  <input className={inp + ' mt-2'} placeholder="Enter substation name"
-                    onChange={e => setForm({...form, substation_name:e.target.value})} />
-                )}
+                {substations.length===0&&<div className="text-[10px] text-amber-400 mt-1">⚠️ No substations found — add them in Substations tab first</div>}
               </div>
 
               {/* Affected feeders preview */}
-              {relatedFeeders.length > 0 && (
+              {form.substation_name && feederOptions.length > 0 && (
                 <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3">
                   <div className="text-[10px] text-red-400 font-bold mb-1.5">
-                    Will alert {relatedFeeders.length} feeder(s):
+                    {relatedFeeders.length > 0 ? `Will alert ${relatedFeeders.length} linked feeder(s):` : `Select specific feeder or leave blank for all:`}
                   </div>
                   <div className="flex flex-wrap gap-1.5">
-                    {relatedFeeders.map(f => (
+                    {feederOptions.slice(0,8).map(f => (
                       <span key={f.id} className="text-[10px] font-mono px-2 py-0.5 rounded-lg bg-red-500/20 text-red-400">
                         {f.code}
                       </span>
@@ -317,7 +313,7 @@ export default function ShutdownPage() {
                 <select className={inp} value={form.feeder_id}
                   onChange={e => setForm({...form, feeder_id:e.target.value})}>
                   <option value="">All feeders on substation</option>
-                  {relatedFeeders.map(f => (
+                  {feederOptions.map(f => (
                     <option key={f.id} value={f.id}>{f.code} — {f.name}</option>
                   ))}
                 </select>

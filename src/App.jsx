@@ -21,6 +21,7 @@ import AuditLogPage from './pages/AuditLogPage.jsx'
 import ShutdownPage from './pages/ShutdownPage.jsx'
 import PatrolPage from './pages/PatrolPage.jsx'
 import SQLEditorPage from './pages/SQLEditorPage.jsx'
+import SubstationsPage from './pages/SubstationsPage.jsx'
 import PublicShutdownPage from './pages/PublicShutdownPage.jsx'
 import ShutdownAlertModal from './components/ShutdownAlertModal.jsx'
 import ExportPage from './pages/ExportPage.jsx'
@@ -94,6 +95,7 @@ export default function App() {
                 <Route path="shutdown"  element={<ShutdownPage />} />
                 <Route path="patrol"    element={<PatrolPage />} />
                 <Route path="sql"       element={<SQLEditorPage />} />
+                <Route path="substations" element={<SubstationsPage />} />
                 <Route path="export"    element={<ExportPage />} />
                 <Route path="*"         element={<Navigate to="/d/map" replace />} />
               </Routes>

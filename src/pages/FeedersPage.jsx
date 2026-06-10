@@ -1,31 +1,33 @@
 // ─── FeedersPage ─────────────────────────────────────────────
 import { useEffect, useState } from 'react'
-import { useFeederStore, useAssetStore, useAuthStore, useUIStore } from '../store/index.js'
+import { useFeederStore, useAssetStore, useSubstationStore, useAuthStore, useUIStore } from '../store/index.js'
 import { feedersApi } from '../api/client.js'
 
 export function FeedersPage() {
   const { feeders, fetch, add, update, remove } = useFeederStore()
+  const { substations, fetch: fetchSubstations } = useSubstationStore()
   const { assets } = useAssetStore()
   const { org, canManageUsers } = useAuthStore()
   const { toast } = useUIStore()
   const [form, setForm] = useState(null)
   const [saving, setSaving] = useState(false)
 
-  useEffect(() => { fetch() }, [])
+  useEffect(() => { fetch(); fetchSubstations() }, [])
 
   const inp = "w-full bg-bg border border-bd rounded-xl px-3 py-2.5 text-sm text-tx focus:outline-none focus:border-a"
 
   function openNew() {
-    setForm({ code:'', name:'', voltage_kv:11, sanctioned_load_kva:'', ht_length_km:'', lt_length_km:'', source_substation:'', substation_name:'', remarks:'' })
+    setForm({ code:'', name:'', voltage_kv:11, sanctioned_load_kva:'', ht_length_km:'', lt_length_km:'', substation_id:'', remarks:'' })
   }
-  function openEdit(f) { setForm({ ...f, _id: f.id }) }
+  function openEdit(f) { setForm({ ...f, _id: f.id, substation_id: f.substation_id || '' }) }
 
   async function save() {
     if (!form.code||!form.name) return toast('Code and name required','err')
     setSaving(true)
     try {
       if (form._id) {
-        const { _id, id, org_id, created_at, ...payload } = form
+        const { _id, id, org_id, created_at, subdivisions, substations, ...rest } = form
+        const payload = { ...rest, substation_id: rest.substation_id || null }
         const updated = await feedersApi.update(form._id, payload)
         update(form._id, updated)
         toast('✅ Feeder updated','ok')
@@ -67,7 +69,7 @@ export function FeedersPage() {
                   <div className="font-semibold text-sm mt-0.5">{f.name}</div>
                   <div className="text-[10px] text-mu mt-1 flex gap-3 flex-wrap">
                     {f.voltage_kv&&<span>{f.voltage_kv}kV</span>}
-                    {f.source_substation&&<span>📡 {f.source_substation}</span>}
+                    {f.substations?.name&&<span>🏭 {f.substations.name}</span>}
                   </div>
                 </div>
                 <div className="flex gap-1">
@@ -136,10 +138,13 @@ export function FeedersPage() {
                   <input type="number" className={inp} value={form.lt_length_km||''} onChange={e=>setForm({...form,lt_length_km:e.target.value})} /></div>
                 <div><label className="text-[10px] text-mu block mb-1">Sanctioned Load (kVA)</label>
                   <input type="number" className={inp} value={form.sanctioned_load_kva||''} onChange={e=>setForm({...form,sanctioned_load_kva:e.target.value})} /></div>
-                <div><label className="text-[10px] text-mu block mb-1">Source GSS / Substation</label>
-                  <input className={inp} placeholder="33/11kV GSS Jhalawar" value={form.source_substation||''} onChange={e=>setForm({...form,source_substation:e.target.value})} /></div>
-                <div><label className="text-[10px] text-mu block mb-1">Substation Name (for Shutdown sync)</label>
-                  <input className={inp} placeholder="GSS Jhalawar" value={form.substation_name||''} onChange={e=>setForm({...form,substation_name:e.target.value})} /></div>
+                <div className="col-span-2"><label className="text-[10px] text-mu block mb-1">Source Sub-Station</label>
+                  <select className={inp} value={form.substation_id||''} onChange={e=>setForm({...form,substation_id:e.target.value})}>
+                    <option value="">— Select substation —</option>
+                    {substations.map(s=><option key={s.id} value={s.id}>{s.code} — {s.name} ({s.voltage_ratio})</option>)}
+                  </select>
+                  {substations.length===0&&<div className="text-[10px] text-amber-400 mt-1">⚠️ No substations yet — add them in the Substations tab first</div>}
+                </div>
               </div>
               <div><label className="text-[10px] text-mu block mb-1">Remarks</label>
                 <textarea className={inp} rows={2} value={form.remarks||''} onChange={e=>setForm({...form,remarks:e.target.value})} /></div>

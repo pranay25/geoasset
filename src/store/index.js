@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { supabase, authApi, assetsApi, feedersApi, woApi, mbApi, usersApi, groupsApi, setOrgId } from '../api/client.js'
+import { supabase, authApi, assetsApi, feedersApi, substationsApi, woApi, mbApi, usersApi, groupsApi, setOrgId } from '../api/client.js'
 
 // ── Auth Store ────────────────────────────────────────────────
 export const useAuthStore = create((set, get) => ({
@@ -157,6 +157,22 @@ export const useUserStore = create((set) => ({
 
   add: (u) => set(s => ({ users: [...s.users, u] })),
   update: (id, u) => set(s => ({ users: s.users.map(x => x.id===id ? {...x,...u} : x) })),
+}))
+
+// ── Substation Store ─────────────────────────────────────────
+export const useSubstationStore = create((set) => ({
+  substations: [],
+  loading: false,
+  fetch: async () => {
+    set({ loading: true })
+    try {
+      const data = await substationsApi.list()
+      set({ substations: data || [], loading: false })
+    } catch(e) { console.warn('Substation fetch:', e.message); set({ loading: false }) }
+  },
+  add:    (s) => set(st => ({ substations: [...st.substations, s] })),
+  update: (id, u) => set(st => ({ substations: st.substations.map(s => s.id===id?{...s,...u}:s) })),
+  remove: (id) => set(st => ({ substations: st.substations.filter(s => s.id!==id) })),
 }))
 
 // ── Group Store ───────────────────────────────────────────────

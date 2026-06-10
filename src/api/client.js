@@ -149,11 +149,44 @@ export const assetsApi = {
   },
 }
 
+// ── Substations ──────────────────────────────────────────────
+export const substationsApi = {
+  async list() {
+    const { data, error } = await supabase.from('substations')
+      .select('*, subdivisions(code,name)')
+      .eq('org_id', _orgId).order('name')
+    if (error) throw error
+    return data || []
+  },
+  async create(payload) {
+    const seq = await supabase.rpc('next_counter', { p_org_id: _orgId, p_name: 'substation' })
+    const code = 'SS-' + String(seq.data).padStart(4,'0')
+    const { data, error } = await supabase.from('substations')
+      .insert({ ...payload, org_id: _orgId, code }).select().single()
+    if (error) throw error
+    return data
+  },
+  async update(id, updates) {
+    const { data, error } = await supabase.from('substations')
+      .update({ ...updates, updated_at: new Date().toISOString() })
+      .eq('id', id).select().single()
+    if (error) throw error
+    return data
+  },
+  async delete(id) {
+    const { data: linked } = await supabase.from('feeders')
+      .select('id').eq('substation_id', id).limit(1)
+    if (linked?.length) throw new Error('Cannot delete — feeders linked to this substation')
+    const { error } = await supabase.from('substations').delete().eq('id', id)
+    if (error) throw error
+  },
+}
+
 // ── Feeders ──────────────────────────────────────────────────
 export const feedersApi = {
   async list() {
     const { data, error } = await supabase.from('feeders')
-      .select('*').eq('org_id', _orgId).order('code')
+      .select('*, substations(id,name,code)').eq('org_id', _orgId).order('code')
     if (error) throw error
     return data
   },
@@ -388,7 +421,7 @@ export const shutdownApi = {
 
   async create(payload) {
     const { data, error } = await supabase.from('shutdowns')
-      .insert({ ...payload, org_id: _orgId }).select().single()
+      .insert({ ...payload, org_id: _orgId }).select('*, profiles!posted_by_id(name,employee_id)').single()
     if (error) throw error
     return data
   },
