@@ -81,8 +81,11 @@ CREATE TABLE profiles (
   employee_id    TEXT UNIQUE NOT NULL,
   name           TEXT NOT NULL,
   mobile         TEXT,
-  role           TEXT NOT NULL CHECK (role IN ('admin','sdo','ao','je','feeder_incharge')),
+  role           TEXT NOT NULL CHECK (role IN ('admin','se','ee','ao','sdo','je','feeder_incharge')),
+  division_id    UUID REFERENCES divisions(id),
   subdivision_id UUID REFERENCES subdivisions(id),
+  substation_id  UUID REFERENCES substations(id),
+  feeder_id      UUID REFERENCES feeders(id),
   is_active      BOOLEAN DEFAULT true,
   created_at     TIMESTAMPTZ DEFAULT NOW(),
   updated_at     TIMESTAMPTZ DEFAULT NOW()
@@ -337,8 +340,8 @@ BEGIN
     VALUES (v_org_id,v_div_id,v_sub->>'code',v_sub->>'name')
     ON CONFLICT DO NOTHING;
   END LOOP;
-  INSERT INTO profiles (id,org_id,employee_id,name,mobile,role)
-  VALUES (p_user_id,v_org_id,p_employee_id,p_user_name,p_mobile,'admin');
+  INSERT INTO profiles (id,org_id,employee_id,name,mobile,role,division_id)
+  VALUES (p_user_id,v_org_id,p_employee_id,p_user_name,p_mobile,'admin',v_div_id);
   INSERT INTO counters (org_id,name,value) VALUES
     (v_org_id,'asset',0),(v_org_id,'wo',0),(v_org_id,'mb',0),
     (v_org_id,'patrol',0),(v_org_id,'substation',0);

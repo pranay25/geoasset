@@ -10,11 +10,13 @@ export const ASSET_TYPES = {
 }
 
 export const ROLES = {
-  feeder_incharge: { label: 'Feeder Incharge', short: 'FI',  color: '#3b82f6', bg: 'rgba(59,130,246,0.15)'  },
-  je:              { label: 'Junior Engineer',  short: 'JE',  color: '#10b981', bg: 'rgba(16,185,129,0.15)'  },
-  ao:              { label: 'Accounts Officer', short: 'AO',  color: '#f59e0b', bg: 'rgba(245,158,11,0.15)'  },
-  sdo:             { label: 'SDO',              short: 'SDO', color: '#a855f7', bg: 'rgba(168,85,247,0.15)'  },
-  admin:           { label: 'Admin',            short: 'ADM', color: '#ef4444', bg: 'rgba(239,68,68,0.15)'   },
+  admin:           { label: 'Admin',             short: 'ADM', color: '#ef4444', bg: 'rgba(239,68,68,0.15)',   scope: 'circle'      },
+  se:              { label: 'SE / Chief Engr.',  short: 'SE',  color: '#dc2626', bg: 'rgba(220,38,38,0.15)',   scope: 'circle'      },
+  ee:              { label: 'Exec. Engineer',    short: 'EE',  color: '#f97316', bg: 'rgba(249,115,22,0.15)',  scope: 'division'    },
+  ao:              { label: 'Accounts Officer',  short: 'AO',  color: '#3b82f6', bg: 'rgba(59,130,246,0.15)',  scope: 'circle'      },
+  sdo:             { label: 'SDO / AEN',         short: 'SDO', color: '#a855f7', bg: 'rgba(168,85,247,0.15)', scope: 'subdivision' },
+  je:              { label: 'Junior Engineer',   short: 'JE',  color: '#10b981', bg: 'rgba(16,185,129,0.15)', scope: 'substation'  },
+  feeder_incharge: { label: 'Feeder Incharge',   short: 'FI',  color: '#f59e0b', bg: 'rgba(245,158,11,0.15)', scope: 'feeder'      },
 }
 
 export const CONDUCTORS = [

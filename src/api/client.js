@@ -309,16 +309,19 @@ export const usersApi = {
     return data
   },
   async create({ email, password, ...profile }) {
-    // Sign up new user — email confirm should be OFF in Supabase settings
+    // Sign up new user
     const { data: auth, error: authErr } = await supabase.auth.signUp({ email, password })
     if (authErr) throw new Error(authErr.message)
-    if (!auth.user) throw new Error('User creation failed — check Supabase Auth settings')
-    // Insert profile row for the new user
-    const { error: profErr } = await supabase.from('profiles').insert({
+    // Supabase returns a user even for duplicate emails (security) — check identities
+    if (!auth.user) throw new Error('User creation failed')
+    const isDuplicate = auth.user.identities && auth.user.identities.length === 0
+    if (isDuplicate) throw new Error('Email already registered. Use a different email.')
+    // Insert profile
+    const { data: prof, error: profErr } = await supabase.from('profiles').insert({
       id: auth.user.id, org_id: _orgId, ...profile,
-    })
+    }).select().single()
     if (profErr) throw new Error(profErr.message)
-    return auth.user
+    return prof
   },
   async update(id, updates) {
     const { data, error } = await supabase.from('profiles')

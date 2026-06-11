@@ -91,6 +91,21 @@ export default function ShutdownPage() {
     } catch(e) { toast(e.message, 'err') }
   }
 
+  // Who can restore a shutdown:
+  // - Admin, SE, EE, AO — always
+  // - SDO — always (sub-division level)
+  // - JE — if it's their substation
+  // - FI — if it's their feeder
+  // - The person who posted it — always
+  function canRestore(sd) {
+    if (!profile) return false
+    const r = profile.role
+    if (['admin','se','ee','ao','sdo'].includes(r)) return true
+    if (r === 'je' && sd.substation_id && profile.substation_id === sd.substation_id) return true
+    if (sd.posted_by_id === profile.id) return true
+    return false
+  }
+
   const active   = shutdowns.filter(s => s.status === 'active')
   const restored = shutdowns.filter(s => s.status === 'restored')
   const displayed = tab === 'active' ? active : restored
@@ -202,7 +217,7 @@ export default function ShutdownPage() {
                       )}
                     </div>
                   </div>
-                  {sd.status==='active' && (profile?.role==='je'||profile?.role==='admin'||profile?.role==='sdo') && (
+                  {sd.status==='active' && canRestore(sd) && (
                     <button onClick={() => restore(sd)}
                       className="px-3 py-2 rounded-xl bg-green-500/10 border border-green-500/30 text-green-400 text-xs font-bold flex-shrink-0">
                       ✅ Restore
@@ -251,6 +266,13 @@ export default function ShutdownPage() {
                   <span>Posted by: {sd.profiles?.name || '—'} ({sd.profiles?.employee_id})</span>
                   <span>{(sd.acknowledged_by||[]).length} acknowledged</span>
                 </div>
+
+                {/* Who can restore info */}
+                {sd.status==='active' && !canRestore(sd) && (
+                  <div className="text-[10px] text-mu bg-bg rounded-xl px-3 py-2">
+                    🔒 Contact SDO or above to restore this supply
+                  </div>
+                )}
 
                 {sd.restore_note && (
                   <div className="mt-2 text-xs text-green-400 bg-green-500/10 rounded-xl p-2">
