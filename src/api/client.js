@@ -317,18 +317,33 @@ export const usersApi = {
     return data
   },
   async create({ email, password, ...profile }) {
+    // Get current org_id from session — _orgId may be stale
+    const { data: { user: currentUser } } = await supabase.auth.getUser()
+    let orgId = _orgId
+    if (!orgId && currentUser) {
+      const { data: adminProfile } = await supabase
+        .from('profiles').select('org_id').eq('id', currentUser.id).single()
+      orgId = adminProfile?.org_id
+    }
+    if (!orgId) throw new Error('Organisation not found — please re-login')
+
     // Sign up new user
     const { data: auth, error: authErr } = await supabase.auth.signUp({ email, password })
     if (authErr) throw new Error(authErr.message)
-    if (!auth.user) throw new Error('User creation failed')
+    if (!auth.user) throw new Error('User creation failed — check Supabase Auth settings')
     const isDuplicate = auth.user.identities && auth.user.identities.length === 0
     if (isDuplicate) throw new Error('Email already registered. Use a different email.')
-    // Insert profile and return with all fields
+
+    // Insert profile
     const { data: prof, error: profErr } = await supabase.from('profiles')
-      .insert({ id: auth.user.id, org_id: _orgId, ...profile })
+      .insert({ id: auth.user.id, org_id: orgId, ...profile })
       .select('*, subdivisions(code,name)')
       .single()
-    if (profErr) throw new Error(profErr.message)
+    if (profErr) {
+      // Profile insert failed — log detail
+      console.error('Profile insert error:', profErr)
+      throw new Error('Profile creation failed: ' + profErr.message + ' (code: ' + profErr.code + ')')
+    }
     return prof
   },
   async update(id, updates) {
