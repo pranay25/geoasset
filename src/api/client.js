@@ -26,23 +26,34 @@ export const authApi = {
     return data.session
   },
   async getProfile(userId) {
-    // Use maybeSingle() everywhere — never throws 406
-    const { data: profile } = await supabase
+    // Fetch profile — RLS allows this via read_own_profile policy (id = auth.uid())
+    const { data: profile, error } = await supabase
       .from('profiles').select('*').eq('id', userId).maybeSingle()
-    if (!profile) throw new Error('Profile not found — please complete Setup or contact admin')
-
-    const { data: orgArr } = await supabase
-      .from('organisations').select('*').eq('id', profile.org_id).limit(1)
-    const org = Array.isArray(orgArr) ? orgArr[0] : orgArr
-
-    let subdiv = null
-    if (profile.subdivision_id) {
-      const { data: sdArr } = await supabase
-        .from('subdivisions').select('code,name').eq('id', profile.subdivision_id).limit(1)
-      subdiv = Array.isArray(sdArr) ? sdArr[0] : sdArr
+    if (error) throw new Error(error.message)
+    if (!profile) {
+      // Profile missing — could be RLS or genuinely missing
+      // Try with explicit user id match
+      const { data: retry } = await supabase
+        .from('profiles').select('*').filter('id', 'eq', userId).limit(1)
+      const p = Array.isArray(retry) ? retry[0] : null
+      if (!p) throw new Error('Profile not found — contact admin')
+      return getProfileWithOrg(p)
     }
+    return getProfileWithOrg(profile)
 
-    return { ...profile, organisations: org || null, subdivisions: subdiv }
+    async function getProfileWithOrg(p) {
+      const { data: orgArr } = await supabase
+        .from('organisations').select('*').eq('id', p.org_id).limit(1)
+      const org = Array.isArray(orgArr) ? orgArr[0] : orgArr
+
+      let subdiv = null
+      if (p.subdivision_id) {
+        const { data: sdArr } = await supabase
+          .from('subdivisions').select('code,name').eq('id', p.subdivision_id).limit(1)
+        subdiv = Array.isArray(sdArr) ? sdArr[0] : sdArr
+      }
+      return { ...p, organisations: org || null, subdivisions: subdiv }
+    }
   },
   async setup({ org, adminUser }) {
     // Step 1: Sign up
