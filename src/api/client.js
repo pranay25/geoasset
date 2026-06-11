@@ -26,23 +26,20 @@ export const authApi = {
     return data.session
   },
   async getProfile(userId) {
-    // Fetch profile
-    const { data: profile, error: profErr } = await supabase
-      .from('profiles').select('*').eq('id', userId).single()
-    if (profErr) throw new Error(profErr.message)
-    if (!profile) throw new Error('Profile not found')
+    // Use maybeSingle() everywhere — never throws 406
+    const { data: profile } = await supabase
+      .from('profiles').select('*').eq('id', userId).maybeSingle()
+    if (!profile) throw new Error('Profile not found — please complete Setup or contact admin')
 
-    // Fetch org — use maybeSingle to avoid coercion error
-    const { data: orgData } = await supabase
+    const { data: orgArr } = await supabase
       .from('organisations').select('*').eq('id', profile.org_id).limit(1)
-    const org = Array.isArray(orgData) ? orgData[0] : orgData
+    const org = Array.isArray(orgArr) ? orgArr[0] : orgArr
 
-    // Fetch subdivision if set
     let subdiv = null
     if (profile.subdivision_id) {
-      const { data: sdData } = await supabase
+      const { data: sdArr } = await supabase
         .from('subdivisions').select('code,name').eq('id', profile.subdivision_id).limit(1)
-      subdiv = Array.isArray(sdData) ? sdData[0] : sdData
+      subdiv = Array.isArray(sdArr) ? sdArr[0] : sdArr
     }
 
     return { ...profile, organisations: org || null, subdivisions: subdiv }
@@ -312,14 +309,14 @@ export const usersApi = {
     // Sign up new user
     const { data: auth, error: authErr } = await supabase.auth.signUp({ email, password })
     if (authErr) throw new Error(authErr.message)
-    // Supabase returns a user even for duplicate emails (security) — check identities
     if (!auth.user) throw new Error('User creation failed')
     const isDuplicate = auth.user.identities && auth.user.identities.length === 0
     if (isDuplicate) throw new Error('Email already registered. Use a different email.')
-    // Insert profile
-    const { data: prof, error: profErr } = await supabase.from('profiles').insert({
-      id: auth.user.id, org_id: _orgId, ...profile,
-    }).select().single()
+    // Insert profile and return with all fields
+    const { data: prof, error: profErr } = await supabase.from('profiles')
+      .insert({ id: auth.user.id, org_id: _orgId, ...profile })
+      .select('*, subdivisions(code,name)')
+      .single()
     if (profErr) throw new Error(profErr.message)
     return prof
   },

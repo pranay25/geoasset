@@ -9,6 +9,8 @@ export const useAuthStore = create((set, get) => ({
   loading: true,
 
   init: async () => {
+    // Refresh session first to handle expired JWTs
+    try { await supabase.auth.refreshSession() } catch {}
     const { data: { session } } = await supabase.auth.getSession()
     if (session?.user) {
       try {
@@ -16,24 +18,33 @@ export const useAuthStore = create((set, get) => ({
         setOrgId(profile.org_id)
         const org = Array.isArray(profile.organisations) ? profile.organisations[0] : (profile.organisations || null)
         set({ user: session.user, profile, org, loading: false })
-      } catch {
+      } catch(e) {
+        console.warn('Init profile error:', e.message)
+        // If profile missing, clear session
+        if (e.message?.includes('coerce') || e.message?.includes('permission')) {
+          await supabase.auth.signOut()
+        }
         set({ loading: false })
       }
     } else {
       set({ loading: false })
     }
     supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' && session) {
-        const profile = await authApi.getProfile(session.user.id)
-        setOrgId(profile.org_id)
-        const org = Array.isArray(profile.organisations) ? profile.organisations[0] : (profile.organisations || null)
-        set({ user: session.user, profile, org })
+      if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session) {
+        try {
+          const profile = await authApi.getProfile(session.user.id)
+          setOrgId(profile.org_id)
+          const org = Array.isArray(profile.organisations) ? profile.organisations[0] : (profile.organisations || null)
+          set({ user: session.user, profile, org })
+        } catch(e) { console.warn('Auth change error:', e.message) }
       }
       if (event === 'SIGNED_OUT') {
+        setOrgId(null)
         set({ user: null, profile: null, org: null })
       }
     })
   },
+
 
   login: async (email, password) => {
     const data = await authApi.login(email, password)
