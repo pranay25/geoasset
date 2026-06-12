@@ -56,8 +56,8 @@ export default function AssetMapPanel({ assets, org, onClose }) {
 
         const labelIcon = L.divIcon({
           className: '',
-          html: `<div style="background:rgba(7,16,30,0.85);color:#e2eaf4;font-size:9px;font-family:monospace;padding:2px 5px;border-radius:4px;border:1px solid rgba(0,212,255,0.3);white-space:nowrap;pointer-events:none;">${a.name}</div>`,
-          iconSize: [0, 0], iconAnchor: [-3, -3]
+          html: `<div style="background:rgba(7,16,30,0.92);color:#e2eaf4;font-size:8px;font-family:monospace;padding:3px 6px;border-radius:4px;border:1px solid rgba(0,212,255,0.4);white-space:nowrap;pointer-events:none;line-height:1.6;margin-top:12px;"><b style="color:#00d4ff">${a.name}</b><br><span style="color:#8eafc2">${parseFloat(a.latitude).toFixed(5)}&deg;N, ${parseFloat(a.longitude).toFixed(5)}&deg;E</span></div>`,
+          iconSize: [0, 0], iconAnchor: [-4, -4]
         })
 
         const marker = L.marker([parseFloat(a.latitude), parseFloat(a.longitude)], { icon })

@@ -142,7 +142,7 @@ ${placemarks}
         // Label
         const label = L.divIcon({
           className: '',
-          html: `<div style="background:rgba(7,16,30,0.85);color:#e2eaf4;font-size:9px;font-family:monospace;padding:2px 5px;border-radius:4px;border:1px solid rgba(28,53,80,0.8);white-space:nowrap;margin-top:12px;">${a.name}</div>`,
+          html: `<div style="background:rgba(7,16,30,0.92);color:#e2eaf4;font-size:8px;font-family:monospace;padding:3px 6px;border-radius:4px;border:1px solid rgba(0,212,255,0.4);white-space:nowrap;margin-top:14px;line-height:1.6;"><b style="color:#00d4ff">${a.name}</b><br><span style="color:#8eafc2">${parseFloat(a.latitude).toFixed(5)}&deg;N, ${parseFloat(a.longitude).toFixed(5)}&deg;E</span></div>`,
           iconSize: [0,0], iconAnchor: [-2,-2]
         })
 
