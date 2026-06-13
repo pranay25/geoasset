@@ -6,7 +6,7 @@ export default function ShutdownPage() {
   const { feeders, fetch: fetchFeeders } = useFeederStore()
   const { assets } = useAssetStore()
   const { substations, fetch: fetchSubstations } = useSubstationStore()
-  const { profile, org } = useAuthStore()
+  const { profile, org, isAdmin } = useAuthStore()
   const { toast } = useUIStore()
 
   const [shutdowns, setShutdowns] = useState([])
@@ -75,6 +75,26 @@ export default function ShutdownPage() {
       setShowForm(false)
       setForm({ substation_name:'', feeder_id:'', shutdown_type:'planned', reason:'', estimated_restore:'' })
     } catch(e) { toast(e.message, 'err') } finally { setSaving(false) }
+  }
+
+  async function deleteShutdown(sd) {
+    if (!confirm(`Permanently delete this shutdown record for "${sd.substation_name}"? This cannot be undone.`)) return
+    try {
+      await shutdownApi.delete(sd.id)
+      setShutdowns(prev => prev.filter(s => s.id !== sd.id))
+      await auditApi.log({ action:'SHUTDOWN_DELETED', category:'system', severity:'warn',
+        description:`Shutdown deleted: ${sd.substation_name}`,
+        meta: { shutdown_id: sd.id, substation: sd.substation_name } })
+      toast('🗑 Shutdown deleted', 'ok')
+    } catch(e) { toast(e.message, 'err') }
+  }
+
+  async function archiveShutdown(sd) {
+    try {
+      const updated = await shutdownApi.archive(sd.id)
+      setShutdowns(prev => prev.map(s => s.id===sd.id ? { ...s, ...updated } : s))
+      toast('📦 Archived', 'ok')
+    } catch(e) { toast(e.message, 'err') }
   }
 
   async function restore(sd) {
@@ -210,19 +230,33 @@ export default function ShutdownPage() {
                     <div className="flex gap-2 mt-1">
                       <span className="text-[9px] font-bold px-2 py-0.5 rounded-full"
                         style={{ background:tc.bg, color:tc.color }}>{tc.label}</span>
-                      {sd.feeders?.code && (
+                      {sd.substations?.name && (
                         <span className="text-[9px] text-mu border border-bd px-2 py-0.5 rounded-full">
-                          ⚡ {sd.feeders.code}
+                          🏭 {sd.substations.code} {sd.substations.voltage_ratio}
                         </span>
                       )}
                     </div>
                   </div>
-                  {sd.status==='active' && canRestore(sd) && (
-                    <button onClick={() => restore(sd)}
-                      className="px-3 py-2 rounded-xl bg-green-500/10 border border-green-500/30 text-green-400 text-xs font-bold flex-shrink-0">
-                      ✅ Restore
-                    </button>
-                  )}
+                  <div className="flex gap-2 flex-shrink-0">
+                    {sd.status==='active' && canRestore(sd) && (
+                      <button onClick={() => restore(sd)}
+                        className="px-3 py-2 rounded-xl bg-green-500/10 border border-green-500/30 text-green-400 text-xs font-bold">
+                        ✅ Restore
+                      </button>
+                    )}
+                    {sd.status==='active' && isAdmin() && (
+                      <button onClick={() => archiveShutdown(sd)}
+                        className="px-2 py-2 rounded-xl border border-bd text-mu text-xs" title="Archive">
+                        📦
+                      </button>
+                    )}
+                    {isAdmin() && (
+                      <button onClick={() => deleteShutdown(sd)}
+                        className="px-2 py-2 rounded-xl border border-red-500/30 text-red-400 text-xs" title="Delete permanently">
+                        🗑
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {/* Reason */}

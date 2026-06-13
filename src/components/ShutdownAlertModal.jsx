@@ -10,14 +10,15 @@ export default function ShutdownAlertModal() {
   const channelRef = useRef(null)
 
   useEffect(() => {
-    if (!profile?.org_id || !org) return
+    if (!profile?.org_id) return
 
     // Load existing active shutdowns on mount
     loadActive()
 
     // Subscribe to real-time new shutdowns
+    const orgId = profile.org_id
     channelRef.current = shutdownApi.subscribe(
-      profile.org_id,
+      orgId,
       // onInsert — new shutdown posted
       (newShutdown) => {
         if (!isAcked(newShutdown)) {

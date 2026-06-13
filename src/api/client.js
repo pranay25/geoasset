@@ -446,7 +446,7 @@ export const patrolApi = {
 export const shutdownApi = {
   async list() {
     const { data, error } = await supabase.from('shutdowns')
-      .select('*, feeders(code,name), profiles!posted_by_id(name,employee_id)')
+      .select('*, substations(id,name,code,voltage_ratio), profiles!posted_by_id(name,employee_id)')
       .eq('org_id', _orgId)
       .order('created_at', { ascending: false })
       .limit(50)
@@ -456,7 +456,7 @@ export const shutdownApi = {
 
   async listActive() {
     const { data, error } = await supabase.from('shutdowns')
-      .select('*, feeders(code,name), profiles!posted_by_id(name,employee_id)')
+      .select('*, substations(id,name,code,voltage_ratio), profiles!posted_by_id(name,employee_id)')
       .eq('org_id', _orgId).eq('status', 'active')
       .order('created_at', { ascending: false })
     if (error) throw error
@@ -497,16 +497,38 @@ export const shutdownApi = {
 
   // Subscribe to real-time shutdown events
   subscribe(orgId, onInsert, onUpdate) {
-    return supabase.channel('shutdowns-' + orgId)
+    // Subscribe without filter — filter client-side by org_id
+    // Supabase Realtime filter on non-indexed columns can miss events
+    const channel = supabase.channel('shutdowns-realtime-' + orgId)
       .on('postgres_changes', {
         event: 'INSERT', schema: 'public', table: 'shutdowns',
-        filter: 'org_id=eq.' + orgId,
-      }, payload => onInsert(payload.new))
+      }, payload => {
+        if (payload.new?.org_id === orgId) onInsert(payload.new)
+      })
       .on('postgres_changes', {
         event: 'UPDATE', schema: 'public', table: 'shutdowns',
-        filter: 'org_id=eq.' + orgId,
-      }, payload => onUpdate(payload.new))
-      .subscribe()
+      }, payload => {
+        if (payload.new?.org_id === orgId) onUpdate(payload.new)
+      })
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('✅ Shutdown realtime subscribed for org:', orgId)
+        }
+      })
+    return channel
+  },
+
+  async delete(id) {
+    const { error } = await supabase.from('shutdowns').delete().eq('id', id)
+    if (error) throw error
+  },
+
+  async archive(id) {
+    const { data, error } = await supabase.from('shutdowns')
+      .update({ status: 'restored', restore_note: 'Archived by admin', actual_restore: new Date().toISOString() })
+      .eq('id', id).select().single()
+    if (error) throw error
+    return data
   },
 
   unsubscribe(channel) {

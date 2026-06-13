@@ -6,9 +6,9 @@ import { ASSET_TYPES, STATUS_COLORS, fmtOut, outColor, waOpen, buildConsumerNoti
 import AssetMapPanel from '../components/assets/AssetMapPanel.jsx'
 
 export function AssetsPage() {
-  const { assets, fetch, update } = useAssetStore()
+  const { assets, fetch, update, add, remove } = useAssetStore()
   const { wos } = useWOStore()
-  const { org, profile } = useAuthStore()
+  const { org, profile, isAdmin } = useAuthStore()
   const { toast } = useUIStore()
   const { groups, fetch: fetchGroups, add: addGroup, update: updateGroup, remove: removeGroup } = useGroupStore()
 
@@ -36,6 +36,19 @@ export function AssetsPage() {
     if (filter.startsWith('out')) return (b.outstanding_amount||0)-(a.outstanding_amount||0)
     return 0
   })
+
+  async function deleteAsset(a) {
+    if (!confirm(`Permanently delete ${a.asset_code || a.name}?\nThis releases the asset code and all linked data.`)) return
+    try {
+      await assetsApi.delete(a.id)
+      remove(a.id)
+      await auditApi.log({ action:'ASSET_DELETED', category:'asset', severity:'critical',
+        description:`Asset ${a.asset_code} (${a.asset_type}) permanently deleted by admin`,
+        meta: { asset_id:a.id, asset_code:a.asset_code, asset_type:a.asset_type } })
+      toast('🗑 Asset deleted', 'ok')
+      setModal(null)
+    } catch(e) { toast(e.message, 'err') }
+  }
 
   async function flag(a) {
     try {
@@ -169,9 +182,9 @@ export function AssetsPage() {
       {/* Asset Modal */}
       {modal && (
         <AssetModal asset={modal} org={org} onClose={()=>setModal(null)}
-          onFlag={()=>{ flag(modal); setModal(null) }} />
+          onFlag={()=>{ flag(modal); setModal(null) }}
+          onDelete={isAdmin() ? ()=>deleteAsset(modal) : null} />
       )}
-
       {/* Groups Panel */}
       {showGroups && (
         <GroupsPanel assets={assets} groups={groups} org={org} profile={profile}
@@ -182,7 +195,7 @@ export function AssetsPage() {
   )
 }
 
-function AssetModal({ asset: a, org, onClose, onFlag }) {
+function AssetModal({ asset: a, org, onClose, onFlag, onDelete }) {
   const cfg = ASSET_TYPES[a.asset_type]
   const out = a.outstanding_amount||0
   const rows = [
@@ -230,6 +243,13 @@ function AssetModal({ asset: a, org, onClose, onFlag }) {
         </div>
 
         <div className="flex gap-2 flex-wrap">
+          {onDelete && (
+            <button onClick={onDelete}
+              className="px-3 py-2.5 rounded-xl border border-red-500/30 bg-red-500/10 text-red-400 text-xs font-bold"
+              title="Delete asset permanently">
+              🗑 Delete
+            </button>
+          )}
           <button onClick={onClose} className="px-4 py-2.5 rounded-xl bg-sf2 border border-bd text-xs font-bold text-mu">Close</button>
           <button onClick={onFlag} className="px-4 py-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-400 text-xs font-bold">
             {a.status==='flag'?'✅ Unflag':'🚩 Flag'}

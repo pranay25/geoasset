@@ -32,8 +32,10 @@ const SAVED_QUERIES = [
   a.details->>'k_number' AS meter_k_number,
   a.details->>'consumer_name' AS consumer_name,
   a.details->>'category' AS meter_category,
-  a.details->>'substation_name' AS substation_name,
-  a.details->>'capacity_mva' AS substation_mva,
+  a.details->>'line_type' AS line_type,
+  a.details->>'conductor' AS conductor,
+  a.details->>'dp_type' AS dp_type,
+  a.details->>'iso_type' AS iso_type,
   a.created_at
 FROM assets a
 LEFT JOIN feeders f ON a.feeder_id = f.id
@@ -159,27 +161,30 @@ ORDER BY f.code`,
     category: 'Assets',
     description: 'All substations with capacity, VCBs, PCBs',
     sql: `SELECT
-  a.asset_code,
-  a.details->>'substation_name' AS substation_name,
-  a.details->>'capacity_mva' AS capacity_mva,
-  a.details->>'voltage_ratio' AS voltage_ratio,
-  a.details->>'num_feeders' AS num_feeders,
-  a.details->>'num_consumers' AS num_consumers,
-  a.details->>'present_load_mva' AS present_load_mva,
-  a.details->>'switchgear_type' AS switchgear_type,
-  a.details->>'num_vcb' AS num_vcb,
-  a.details->>'num_pcb' AS num_pcb,
-  a.details->>'village' AS village,
-  a.details->>'tehsil' AS tehsil,
-  a.details->>'jen_office' AS jen_office,
-  a.details->>'subdivision_name' AS subdivision_name,
-  a.details->>'district' AS district,
-  a.latitude,
-  a.longitude,
-  a.remarks
-FROM assets a
-WHERE a.asset_type = 'substation'
-ORDER BY a.asset_code`,
+  s.code,
+  s.name AS substation_name,
+  s.voltage_ratio,
+  s.capacity_mva,
+  s.present_load_mva,
+  ROUND((s.present_load_mva / NULLIF(s.capacity_mva, 0) * 100)::numeric, 1) AS load_pct,
+  s.num_feeders,
+  s.num_consumers,
+  s.switchgear_type,
+  s.num_vcb,
+  s.num_pcb,
+  s.village,
+  s.tehsil,
+  s.jen_office,
+  s.district,
+  s.latitude,
+  s.longitude,
+  s.survey_accuracy_m,
+  s.remarks,
+  sd.code AS subdivision_code,
+  sd.name AS subdivision_name
+FROM substations s
+LEFT JOIN subdivisions sd ON s.subdivision_id = sd.id
+ORDER BY s.code`,
   },
   {
     label: 'Patrol Reports Summary',
@@ -196,7 +201,7 @@ ORDER BY a.asset_code`,
   pr.total_issues,
   pr.start_time,
   pr.end_time,
-  EXTRACT(EPOCH FROM (pr.end_time - pr.start_time))/60 AS duration_mins,
+  ROUND(EXTRACT(EPOCH FROM (pr.end_time - pr.start_time))/60::numeric, 1) AS duration_mins,
   pr.remarks
 FROM patrol_reports pr
 LEFT JOIN feeders f ON pr.feeder_id = f.id
@@ -281,6 +286,29 @@ ORDER BY al.created_at DESC
 LIMIT 200`,
   },
   {
+    label: 'Feeders with Substation',
+    category: 'Assets',
+    description: 'All feeders showing linked substation details',
+    sql: `SELECT
+  f.code AS feeder_code,
+  f.name AS feeder_name,
+  f.voltage_kv,
+  f.sanctioned_load_kva,
+  f.ht_length_km,
+  f.lt_length_km,
+  s.name AS substation_name,
+  s.code AS substation_code,
+  s.voltage_ratio,
+  s.capacity_mva,
+  sd.code AS subdivision_code,
+  sd.name AS subdivision_name,
+  f.remarks
+FROM feeders f
+LEFT JOIN substations s ON f.substation_id = s.id
+LEFT JOIN subdivisions sd ON f.subdivision_id = sd.id
+ORDER BY f.code`,
+  },
+  {
     label: 'Shutdown History',
     category: 'Operations',
     description: 'All shutdowns with duration and affected feeders',
@@ -292,12 +320,15 @@ LIMIT 200`,
   s.start_time,
   s.estimated_restore,
   s.actual_restore,
-  EXTRACT(EPOCH FROM (COALESCE(s.actual_restore, NOW()) - s.start_time))/3600 AS duration_hours,
+  ROUND(EXTRACT(EPOCH FROM (COALESCE(s.actual_restore, NOW()) - s.start_time))/3600::numeric, 2) AS duration_hours,
   s.restore_note,
   array_length(s.affected_feeders, 1) AS num_affected_feeders,
+  sub.name AS substation_name_full,
+  sub.voltage_ratio,
   p.name AS posted_by,
   p.employee_id
 FROM shutdowns s
+LEFT JOIN substations sub ON s.substation_id = sub.id
 LEFT JOIN profiles p ON s.posted_by_id = p.id
 ORDER BY s.created_at DESC`,
   },
