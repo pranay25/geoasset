@@ -68,7 +68,7 @@ export const useAuthStore = create((set, get) => ({
 
   canSurvey: () => true,
 
-  canManageUsers: () => ['admin','se','ee','ao','sdo'].includes(get().profile?.role),
+  canManageUsers: () => get().profile?.role === 'admin',
 
 
 

@@ -528,17 +528,34 @@ export const groupsApi = {
 export const maintenanceApi = {
 
   async list() {
-    const feederIds = await getScopedFeederIds()
-    // Supabase doesn't allow same table joined multiple times in one query
-    // Fetch proposals with minimal joins, then enrich separately
+    const role = _profile?.role
     let query = supabase.from('maintenance_proposals')
       .select('*, feeders(code,name), subdivisions(code,name), profiles!created_by_id(name,employee_id,role)')
       .eq('org_id', _orgId)
       .order('created_at', { ascending: false })
-    if (feederIds !== null) {
-      if (feederIds.length === 0) return []
-      query = query.in('feeder_id', feederIds)
+
+    // Role-based filtering — proposals have subdivision_id directly
+    if (!['admin','se','ao'].includes(role)) {
+      if (role === 'feeder_incharge' && _profile?.feeder_id) {
+        query = query.eq('feeder_id', _profile.feeder_id)
+      } else if (role === 'je' && _profile?.substation_id) {
+        // JE sees proposals for feeders on their substation
+        const feederIds = await getScopedFeederIds()
+        if (!feederIds?.length) return []
+        query = query.in('feeder_id', feederIds)
+      } else if (role === 'sdo' && _profile?.subdivision_id) {
+        // SDO sees proposals in their subdivision directly
+        query = query.eq('subdivision_id', _profile.subdivision_id)
+      } else if (role === 'ee' && _profile?.division_id) {
+        // EE sees proposals in subdivisions of their division
+        const { data: subs } = await supabase.from('subdivisions')
+          .select('id').eq('division_id', _profile.division_id)
+        const subIds = (subs||[]).map(s=>s.id)
+        if (!subIds.length) return []
+        query = query.in('subdivision_id', subIds)
+      }
     }
+
     const { data, error } = await query
     if (error) throw error
     return data || []

@@ -110,8 +110,10 @@ export default function PatrolPage() {
 
   // Filter feeders to FI's own feeders only
   const myFeeders = profile?.role === 'feeder_incharge'
-    ? feeders.filter(f => f.subdivision_id === profile?.subdivision_id)
-    : feeders
+    ? feeders.filter(f => f.id === profile?.feeder_id)  // FI sees only their feeder
+    : profile?.role === 'je'
+      ? feeders.filter(f => f.substation_id === profile?.substation_id)  // JE sees their substation feeders
+      : feeders
 
   useEffect(() => {
     loadReports()
@@ -451,12 +453,13 @@ export default function PatrolPage() {
 
   const inp = "w-full bg-bg border border-bd rounded-xl px-3 py-2.5 text-sm text-tx focus:outline-none focus:border-a"
 
-  // Guard: if mode=active but no activeReport, reset to list
+  // Guard: if mode=active/complete but no activeReport, reset to list
   useEffect(() => {
-    if ((mode === 'active' || mode === 'complete') && !activeReport) {
+    if ((mode === 'active' || mode === 'complete') && !activeReport?.id) {
+      console.log('Patrol: stale session detected, clearing')
       clearPatrol()
     }
-  }, [mode, activeReport])
+  }, [])  // only on mount — prevents loop
 
   // ── LIST MODE ───────────────────────────────────────────────
   if (mode === 'list') return (

@@ -337,7 +337,7 @@ ORDER BY s.created_at DESC`,
 const CATEGORIES = [...new Set(SAVED_QUERIES.map(q => q.category))]
 
 export default function SQLEditorPage() {
-  const { isAdmin } = useAuthStore()
+  const { isAdmin, profile } = useAuthStore()
   const { toast } = useUIStore()
 
   const [sql, setSql] = useState('')
@@ -430,7 +430,7 @@ export default function SQLEditorPage() {
     toast(`📥 Exported JSON`, 'ok')
   }
 
-  if (!isAdmin()) return (
+  if (profile?.role !== 'admin') return (
     <div className="h-full flex items-center justify-center text-mu">
       <div className="text-center"><div className="text-4xl mb-3">🔐</div><div>Admin access only</div></div>
     </div>

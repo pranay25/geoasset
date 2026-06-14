@@ -310,7 +310,9 @@ export default function MaintenancePage() {
   const canAct = (p) => {
     const cfg = STATUS_CONFIG[p?.status]
     if (!cfg) return false
-    if (['admin','se'].includes(profile?.role)) return true
+    // Admin can act at any stage
+    if (profile?.role === 'admin') return true
+    // Each role can only act at their designated stage
     return cfg.role === profile?.role
   }
 
@@ -536,8 +538,9 @@ export default function MaintenancePage() {
           <div>
             <div className="flex items-center justify-between mb-2">
               <div className="font-rajdhani font-bold text-xs text-a">TAGGED ASSETS ({activeItems.length})</div>
-              {(selected.status==='draft' || (selected.status==='je_review'&&profile?.role==='je')) &&
-               (selected.status==='draft' ? profile?.role==='feeder_incharge'||isAdmin() : true) && (
+              {((selected.status==='draft' && (profile?.role==='feeder_incharge'||isAdmin())) ||
+                (selected.status==='je_review' && (profile?.role==='je'||isAdmin())) ||
+                isAdmin()) && (
                 <button onClick={()=>setItemForm({assetId:'',assetType:'',issueType:'',description:'',severity:'medium'})}
                   className="px-2 py-1 rounded-lg bg-a/10 border border-a/30 text-a text-[10px] font-bold">
                   + Tag Asset

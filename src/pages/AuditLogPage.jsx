@@ -20,7 +20,7 @@ const SEVERITY_CONFIG = {
 }
 
 export default function AuditLogPage() {
-  const { isAdmin } = useAuthStore()
+  const { isAdmin, profile } = useAuthStore()
   const { toast } = useUIStore()
 
   const [logs, setLogs] = useState([])
@@ -49,7 +49,7 @@ export default function AuditLogPage() {
     return d.toLocaleDateString('en-IN', { day:'2-digit', month:'short' }) + ' ' + d.toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit' })
   }
 
-  if (!isAdmin()) return (
+  if (profile?.role !== 'admin') return (
     <div className="h-full flex items-center justify-center text-mu">
       <div className="text-center"><div className="text-4xl mb-3">🔐</div><div>Admin access only</div></div>
     </div>

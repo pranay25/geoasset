@@ -105,7 +105,7 @@ export default function HierarchyPage() {
 
   const inp = "w-full bg-bg border border-bd rounded-xl px-3 py-2.5 text-sm text-tx focus:outline-none focus:border-a"
 
-  if (!isAdmin()) return (
+  if (profile?.role !== 'admin') return (
     <div className="h-full flex items-center justify-center text-mu">
       <div className="text-center"><div className="text-4xl mb-3">🚫</div><div>Admin access only</div></div>
     </div>

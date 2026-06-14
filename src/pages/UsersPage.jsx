@@ -139,6 +139,13 @@ export default function UsersPage() {
     ? feeders.filter(f => f.substation_id === form.substation_id)
     : feeders
 
+  // Only admin can access Users page
+  if (me?.role !== 'admin') return (
+    <div className="h-full flex items-center justify-center text-mu">
+      <div className="text-center"><div className="text-4xl mb-3">🔐</div><div className="text-sm">Admin access only</div></div>
+    </div>
+  )
+
   return (
     <div className="h-full flex flex-col">
       <div className="p-4 pb-2 flex-shrink-0 flex items-center justify-between border-b border-bd">

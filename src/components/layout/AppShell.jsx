@@ -25,9 +25,8 @@ export default function AppShell({ children }) {
   const { toasts } = useUIStore()
   const totalOut = useAssetStore(s => s.totalOutstanding())
 
+  // adminOnly tabs only visible to admin role
   const visibleTabs = TABS.filter(t => !t.adminOnly || canManageUsers())
-  // We'll pass activeShutdownCount via a simple window global set by ShutdownAlertModal
-  // For now just show the tab
   const role = ROLES[profile?.role]
 
   return (
