@@ -24,7 +24,7 @@ const REJECT_TO = {
 const ISSUE_TYPES = {
   pole:   ['Tilted Pole','Broken Pole','Rusted Pole','No Earthing','Leaning Pole','Other'],
   dtr:    ['DTR Burnt','DTR Failed','DTR Overloaded','Oil Leakage','Bushing Cracked','Other'],
-  line:   ['Line Sag','Conductor Break','Loose Joint','Insulation Damage','Tree Touching','Other'],
+  line:   ['Line Sag (specify From/To pole)','Conductor Break','Loose Joint','Insulation Damage','Tree Touching Wire','Conductor Stolen','Stay Wire Broken','Other'],
   iso:    ['Faulty Isolator','Broken Disc','Flashover Marks','Other'],
   meter:  ['Meter Bypass','Meter Broken','No Display','Other'],
   pillar: ['Door Missing','Fuse Blown','Other'],
@@ -248,8 +248,8 @@ export default function MaintenancePage() {
       y += 14
       doc.setFillColor(7,16,30); doc.rect(M, y-5, W-2*M, 8,'F')
       doc.setFont('helvetica','bold'); doc.setTextColor(0,212,255); doc.setFontSize(7.5)
-      const cols = ['#','Asset Code','Type','Issue','Severity','Description','JE Verified']
-      const cw = [7,22,18,32,16,55,22]
+      const cols = ['#','Asset Code','Type','Issue','Severity','Description','GPS Coordinates']
+      const cw = [7,20,18,30,14,42,41]
       let cx = M
       cols.forEach((c,i) => { doc.text(c, cx+1, y); cx+=cw[i] })
       y+=3
@@ -265,17 +265,20 @@ export default function MaintenancePage() {
         doc.setFillColor(r,g,b); doc.circle(M+3.5,y-1,1.5,'F')
         cx = M
         doc.setFontSize(7)
+        // Get GPS from assets store if available
+        const assetGPS = item.asset_id ? assets.find(a=>a.id===item.asset_id) : null
+        const gpsText = assetGPS ? `${parseFloat(assetGPS.latitude).toFixed(5)}°N ${parseFloat(assetGPS.longitude).toFixed(5)}°E` : '—'
         const row = [
           String(item.seq_number||idx+1),
           item.asset_code||'—',
           ASSET_TYPES[item.asset_type]?.label||item.asset_type||'—',
           item.issue_type||'—',
           (item.severity||'').toUpperCase(),
-          (item.issue_description||'').slice(0,60),
-          item.je_verified ? '✓ Yes' : '—',
+          (item.issue_description||'').slice(0,45),
+          gpsText,
         ]
         row.forEach((v,i) => {
-          doc.setTextColor(i===6&&item.je_verified?0:20, i===6&&item.je_verified?150:20, i===6&&item.je_verified?0:20)
+          doc.setTextColor(i===6?0:20, i===6?100:20, i===6?180:20)
           doc.text(String(v), cx+1, y)
           cx+=cw[i]
         })
@@ -680,7 +683,7 @@ export default function MaintenancePage() {
                   <label className="text-[10px] text-mu block mb-1">Description</label>
                   <textarea className={inp} rows={2} value={itemForm.description}
                     onChange={e=>setItemForm({...itemForm,description:e.target.value})}
-                    placeholder="Describe the issue in detail…"/>
+                    placeholder={itemForm.issueType?.includes('Sag') ? 'e.g. Line sag between P-0005 and P-0006, approx 2m clearance from ground' : "Describe the issue in detail…"}/>
                 </div>
                 <div className="flex gap-3">
                   <button onClick={()=>setItemForm(null)} className="px-5 py-3 rounded-xl border border-bd text-mu font-bold">Cancel</button>

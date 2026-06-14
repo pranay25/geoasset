@@ -910,6 +910,7 @@ export const nearbyApi = {
 export const hierarchyApi = {
   // Divisions
   async listDivisions() {
+    if (!_orgId) return []
     const { data, error } = await supabase.from('divisions')
       .select('*, subdivisions(*)').eq('org_id', _orgId).order('name')
     if (error) throw error

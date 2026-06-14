@@ -10,14 +10,18 @@ export function FeedersPage() {
   const { org, canManageUsers } = useAuthStore()
   const { toast } = useUIStore()
   const [form, setForm] = useState(null)
+  const [subdivisions, setSubdivisions] = useState([])
   const [saving, setSaving] = useState(false)
 
-  useEffect(() => { fetch(); fetchSubstations() }, [])
+  useEffect(() => {
+    fetch(); fetchSubstations()
+    hierarchyApi.listDivisions().then(divs => setSubdivisions(divs.flatMap(d=>d.subdivisions||[]))).catch(()=>{})
+  }, [])
 
   const inp = "w-full bg-bg border border-bd rounded-xl px-3 py-2.5 text-sm text-tx focus:outline-none focus:border-a"
 
   function openNew() {
-    setForm({ code:'', name:'', voltage_kv:11, sanctioned_load_kva:'', ht_length_km:'', lt_length_km:'', substation_id:'', remarks:'' })
+    setForm({ code:'', name:'', voltage_kv:11, sanctioned_load_kva:'', ht_length_km:'', lt_length_km:'', substation_id:'', subdivision_id:'', remarks:'' })
   }
   function openEdit(f) { setForm({ ...f, _id: f.id, substation_id: f.substation_id || '' }) }
 
@@ -144,6 +148,12 @@ export function FeedersPage() {
                     {substations.map(s=><option key={s.id} value={s.id}>{s.code} — {s.name} ({s.voltage_ratio})</option>)}
                   </select>
                   {substations.length===0&&<div className="text-[10px] text-amber-400 mt-1">⚠️ No substations yet — add them in the Substations tab first</div>}
+                </div>
+                <div className="col-span-2"><label className="text-[10px] text-mu block mb-1">Sub-Division *</label>
+                  <select className={inp} value={form.subdivision_id||''} onChange={e=>setForm({...form,subdivision_id:e.target.value})}>
+                    <option value="">— Select sub-division —</option>
+                    {subdivisions.map(s=><option key={s.id} value={s.id}>{s.code} — {s.name}</option>)}
+                  </select>
                 </div>
               </div>
               <div><label className="text-[10px] text-mu block mb-1">Remarks</label>
