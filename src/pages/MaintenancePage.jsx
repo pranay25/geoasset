@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useAssetStore, useFeederStore, useAuthStore, useUIStore } from '../store/index.js'
-import { maintenanceApi, auditApi } from '../api/client.js'
+import { maintenanceApi, auditApi, hierarchyApi } from '../api/client.js'
 import { ASSET_TYPES } from '../utils/constants.js'
 
 const STATUS_CONFIG = {
@@ -39,6 +39,7 @@ export default function MaintenancePage() {
   const { feeders } = useFeederStore()
   const { profile, org, isAdmin } = useAuthStore()
   const { toast } = useUIStore()
+  const [subdivisions, setSubdivisions] = useState([])
 
   const [proposals, setProposals] = useState([])
   const [loading, setLoading] = useState(true)
@@ -48,7 +49,7 @@ export default function MaintenancePage() {
   const [saving, setSaving] = useState(false)
 
   // New proposal form
-  const [newForm, setNewForm] = useState({ feederId:'', title:'', description:'', priority:'normal' })
+  const [newForm, setNewForm] = useState({ feederId:'', subdivisionId:'', title:'', description:'', priority:'normal' })
 
   // Add item form (in detail view)
   const [itemForm, setItemForm] = useState(null)
@@ -61,7 +62,12 @@ export default function MaintenancePage() {
   const [aoBudgetNote, setAOBudgetNote] = useState('')
   const [aoBudgetStatus, setAOBudgetStatus] = useState('provisionally_approved')
 
-  useEffect(() => { loadProposals() }, [])
+  useEffect(() => {
+    loadProposals()
+    hierarchyApi.listDivisions()
+      .then(divs => setSubdivisions(divs.flatMap(d => d.subdivisions || [])))
+      .catch(() => {})
+  }, [])
 
   async function loadProposals() {
     setLoading(true)
@@ -81,12 +87,13 @@ export default function MaintenancePage() {
   async function createProposal() {
     if (!newForm.feederId || !newForm.title) return toast('Feeder and title required','err')
     const feeder = feeders.find(f => f.id === newForm.feederId)
-    if (!feeder?.subdivision_id) return toast('Feeder has no sub-division linked','err')
+    const subdivisionId = feeder?.subdivision_id || newForm.subdivisionId
+    if (!subdivisionId) return toast('Select a sub-division for this feeder','err')
     setSaving(true)
     try {
       const p = await maintenanceApi.create({
         feederId: newForm.feederId,
-        subdivisionId: feeder.subdivision_id,
+        subdivisionId,
         title: newForm.title,
         description: newForm.description,
         priority: newForm.priority,
@@ -396,11 +403,31 @@ export default function MaintenancePage() {
       <div className="flex-1 overflow-y-auto space-y-3">
         <div>
           <label className="text-[10px] text-mu block mb-1">Feeder *</label>
-          <select className={inp} value={newForm.feederId} onChange={e=>setNewForm({...newForm,feederId:e.target.value})}>
+          <select className={inp} value={newForm.feederId}
+            onChange={e=>setNewForm({...newForm, feederId:e.target.value, subdivisionId:''})}>
             <option value="">Select feeder…</option>
             {feeders.map(f=><option key={f.id} value={f.id}>{f.code} — {f.name}</option>)}
           </select>
         </div>
+        {/* Show subdivision selector if feeder has no subdivision linked */}
+        {newForm.feederId && !feeders.find(f=>f.id===newForm.feederId)?.subdivision_id && (
+          <div>
+            <label className="text-[10px] text-mu block mb-1">Sub-Division * <span className="text-amber-400">(feeder not linked — select manually)</span></label>
+            <select className={inp} value={newForm.subdivisionId}
+              onChange={e=>setNewForm({...newForm, subdivisionId:e.target.value})}>
+              <option value="">Select sub-division…</option>
+              {subdivisions.map(s=><option key={s.id} value={s.id}>{s.code} — {s.name}</option>)}
+            </select>
+            <div className="text-[10px] text-amber-400 mt-1">
+              ⚠️ Also link this feeder to its sub-division in the Feeders tab for future proposals
+            </div>
+          </div>
+        )}
+        {newForm.feederId && feeders.find(f=>f.id===newForm.feederId)?.subdivision_id && (
+          <div className="text-[10px] text-green-400 px-1">
+            ✅ Sub-Division: {subdivisions.find(s=>s.id===feeders.find(f=>f.id===newForm.feederId)?.subdivision_id)?.name || 'Linked'}
+          </div>
+        )}
         <div>
           <label className="text-[10px] text-mu block mb-1">Title *</label>
           <input className={inp} placeholder="e.g. Annual maintenance — F1 Jhalawar"
