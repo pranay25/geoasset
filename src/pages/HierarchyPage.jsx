@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useAuthStore, useUIStore } from '../store/index.js'
 import { hierarchyApi } from '../api/client.js'
-import { supabase } from '../api/client.js'
 
 export default function HierarchyPage() {
-  const { org, isAdmin } = useAuthStore()
+  const { org, profile, isAdmin } = useAuthStore()
   const { toast } = useUIStore()
 
   const [divisions, setDivisions] = useState([])
@@ -21,20 +20,12 @@ export default function HierarchyPage() {
   async function loadAll() {
     setLoading(true)
     try {
-      // Use direct supabase query as fallback if hierarchyApi fails
-      let data = []
-      if (typeof hierarchyApi?.listDivisions === 'function') {
-        data = await hierarchyApi.listDivisions()
-      } else {
-        // Direct query fallback
-        const { data: divs } = await supabase.from('divisions').select('*, subdivisions(*)')
-        data = divs || []
-      }
+      const data = await hierarchyApi.listDivisions()
       setDivisions(data || [])
       if (data?.length > 0 && !expandedDiv) setExpandedDiv(data[0].id)
     } catch(e) {
       console.error('Hierarchy load error:', e)
-      toast('Could not load hierarchy: ' + e.message, 'err')
+      // Don't toast on load — just show empty state
     }
     finally { setLoading(false) }
   }

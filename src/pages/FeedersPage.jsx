@@ -1,7 +1,7 @@
 // ─── FeedersPage ─────────────────────────────────────────────
 import { useEffect, useState } from 'react'
 import { useFeederStore, useAssetStore, useSubstationStore, useAuthStore, useUIStore } from '../store/index.js'
-import { feedersApi } from '../api/client.js'
+import { feedersApi, hierarchyApi } from '../api/client.js'
 
 export function FeedersPage() {
   const { feeders, fetch, add, update, remove } = useFeederStore()
@@ -30,7 +30,7 @@ export function FeedersPage() {
     setSaving(true)
     try {
       if (form._id) {
-        const { _id, id, org_id, created_at, subdivisions, substations, ...rest } = form
+        const { _id, id, org_id, created_at, subdivisions: _formSubdivisions, substations: _formSubstations, ...rest } = form
         const payload = { ...rest, substation_id: rest.substation_id || null }
         const updated = await feedersApi.update(form._id, payload)
         update(form._id, updated)
