@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { supabase, authApi, assetsApi, feedersApi, substationsApi, woApi, mbApi, usersApi, groupsApi, setOrgId } from '../api/client.js'
+import { supabase, authApi, assetsApi, feedersApi, substationsApi, woApi, mbApi, usersApi, groupsApi, setOrgId, setProfileScope, clearScopeCache } from '../api/client.js'
 
 // ── Auth Store ────────────────────────────────────────────────
 export const useAuthStore = create((set, get) => ({
@@ -16,6 +16,7 @@ export const useAuthStore = create((set, get) => ({
       try {
         const profile = await authApi.getProfile(session.user.id)
         setOrgId(profile.org_id)
+        setProfileScope(profile)
         const org = Array.isArray(profile.organisations) ? profile.organisations[0] : (profile.organisations || null)
         set({ user: session.user, profile, org, loading: false })
       } catch(e) {
@@ -34,12 +35,16 @@ export const useAuthStore = create((set, get) => ({
         try {
           const profile = await authApi.getProfile(session.user.id)
           setOrgId(profile.org_id)
+          setProfileScope(profile)
+          clearScopeCache()
           const org = Array.isArray(profile.organisations) ? profile.organisations[0] : (profile.organisations || null)
           set({ user: session.user, profile, org })
         } catch(e) { console.warn('Auth change error:', e.message) }
       }
       if (event === 'SIGNED_OUT') {
         setOrgId(null)
+        setProfileScope(null)
+        clearScopeCache()
         set({ user: null, profile: null, org: null })
       }
     })

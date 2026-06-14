@@ -110,15 +110,101 @@ export const authApi = {
 
 // ── Helper: get my org_id ─────────────────────────────────────
 let _orgId = null
+let _profile = null
 export function setOrgId(id) { _orgId = id }
 export function getOrgId() { return _orgId }
+export function setProfileScope(profile) { _profile = profile }
+
+// ── Role-based data scope ────────────────────────────────────
+// Returns filtered feeder IDs for the current user's scope
+// Used to filter assets, WOs, MBs that don't have direct scope FKs
+let _scopedFeederIds = null   // cached feeder ids in scope
+let _scopedSubstationIds = null
+
+async function getScopedFeederIds() {
+  if (!_profile) return null
+  const role = _profile.role
+  if (['admin','se','ao'].includes(role)) return null  // no filter = see all
+  if (_scopedFeederIds) return _scopedFeederIds
+
+  let query = supabase.from('feeders').select('id').eq('org_id', _orgId)
+
+  if (role === 'feeder_incharge' && _profile.feeder_id) {
+    _scopedFeederIds = [_profile.feeder_id]
+    return _scopedFeederIds
+  }
+  if (role === 'je' && _profile.substation_id) {
+    query = query.eq('substation_id', _profile.substation_id)
+  }
+  if (role === 'sdo' && _profile.subdivision_id) {
+    query = query.eq('subdivision_id', _profile.subdivision_id)
+  }
+  if (role === 'ee' && _profile.division_id) {
+    // Get all subdivisions in this division
+    const { data: subs } = await supabase.from('subdivisions')
+      .select('id').eq('division_id', _profile.division_id)
+    const subIds = (subs||[]).map(s => s.id)
+    if (subIds.length) query = query.in('subdivision_id', subIds)
+    else { _scopedFeederIds = []; return [] }
+  }
+
+  const { data } = await query
+  _scopedFeederIds = (data||[]).map(f => f.id)
+  return _scopedFeederIds
+}
+
+async function getScopedSubstationIds() {
+  if (!_profile) return null
+  const role = _profile.role
+  if (['admin','se','ao'].includes(role)) return null
+  if (_scopedSubstationIds) return _scopedSubstationIds
+
+  let query = supabase.from('substations').select('id').eq('org_id', _orgId)
+
+  if (role === 'feeder_incharge') {
+    // FI can see the substation their feeder belongs to
+    if (_profile.substation_id) _scopedSubstationIds = [_profile.substation_id]
+    else _scopedSubstationIds = []
+    return _scopedSubstationIds
+  }
+  if (role === 'je' && _profile.substation_id) {
+    _scopedSubstationIds = [_profile.substation_id]
+    return _scopedSubstationIds
+  }
+  if (role === 'sdo' && _profile.subdivision_id) {
+    query = query.eq('subdivision_id', _profile.subdivision_id)
+  }
+  if (role === 'ee' && _profile.division_id) {
+    const { data: subs } = await supabase.from('subdivisions')
+      .select('id').eq('division_id', _profile.division_id)
+    const subIds = (subs||[]).map(s => s.id)
+    if (subIds.length) query = query.in('subdivision_id', subIds)
+    else { _scopedSubstationIds = []; return [] }
+  }
+
+  const { data } = await query
+  _scopedSubstationIds = (data||[]).map(s => s.id)
+  return _scopedSubstationIds
+}
+
+// Reset scope cache on login/logout
+export function clearScopeCache() {
+  _scopedFeederIds = null
+  _scopedSubstationIds = null
+}
 
 // ── Assets ───────────────────────────────────────────────────
 export const assetsApi = {
   async list() {
-    const { data, error } = await supabase
-      .from('assets').select('*, feeders(code,name), profiles(name)')
+    const feederIds = await getScopedFeederIds()
+    let query = supabase.from('assets')
+      .select('*, feeders(code,name), profiles(name)')
       .eq('org_id', _orgId).order('created_at', { ascending: false })
+    if (feederIds !== null) {
+      if (feederIds.length === 0) return []
+      query = query.in('feeder_id', feederIds)
+    }
+    const { data, error } = await query
     if (error) throw error
     return data
   },
@@ -178,9 +264,15 @@ export const assetsApi = {
 // ── Substations ──────────────────────────────────────────────
 export const substationsApi = {
   async list() {
-    const { data, error } = await supabase.from('substations')
+    const substationIds = await getScopedSubstationIds()
+    let query = supabase.from('substations')
       .select('*, subdivisions(code,name)')
       .eq('org_id', _orgId).order('name')
+    if (substationIds !== null) {
+      if (substationIds.length === 0) return []
+      query = query.in('id', substationIds)
+    }
+    const { data, error } = await query
     if (error) throw error
     return data || []
   },
@@ -211,8 +303,25 @@ export const substationsApi = {
 // ── Feeders ──────────────────────────────────────────────────
 export const feedersApi = {
   async list() {
-    const { data, error } = await supabase.from('feeders')
+    const role = _profile?.role
+    let query = supabase.from('feeders')
       .select('*, substations(id,name,code)').eq('org_id', _orgId).order('code')
+    // Apply scope
+    if (!['admin','se','ao'].includes(role)) {
+      if (role === 'feeder_incharge' && _profile?.feeder_id)
+        query = query.eq('id', _profile.feeder_id)
+      else if (role === 'je' && _profile?.substation_id)
+        query = query.eq('substation_id', _profile.substation_id)
+      else if (role === 'sdo' && _profile?.subdivision_id)
+        query = query.eq('subdivision_id', _profile.subdivision_id)
+      else if (role === 'ee' && _profile?.division_id) {
+        const { data: subs } = await supabase.from('subdivisions')
+          .select('id').eq('division_id', _profile.division_id)
+        const subIds = (subs||[]).map(s => s.id)
+        if (subIds.length) query = query.in('subdivision_id', subIds)
+      }
+    }
+    const { data, error } = await query
     if (error) throw error
     return data
   },
@@ -239,9 +348,15 @@ export const feedersApi = {
 // ── Work Orders ───────────────────────────────────────────────
 export const woApi = {
   async list() {
-    const { data, error } = await supabase.from('work_orders')
+    const feederIds = await getScopedFeederIds()
+    let query = supabase.from('work_orders')
       .select('*, feeders(code,name), profiles!assigned_to_id(name)')
       .eq('org_id', _orgId).order('created_at', { ascending: false })
+    if (feederIds !== null) {
+      if (feederIds.length === 0) return []
+      query = query.in('feeder_id', feederIds)
+    }
+    const { data, error } = await query
     if (error) throw error
     return data
   },
@@ -283,9 +398,15 @@ export const woApi = {
 // ── Measurement Books ─────────────────────────────────────────
 export const mbApi = {
   async list() {
-    const { data, error } = await supabase.from('measurement_books')
+    const feederIds = await getScopedFeederIds()
+    let query = supabase.from('measurement_books')
       .select('*, feeders(code,name), work_orders(wo_number), profiles!prepared_by_id(name)')
       .eq('org_id', _orgId).order('created_at', { ascending: false })
+    if (feederIds !== null) {
+      if (feederIds.length > 0) query = query.in('feeder_id', feederIds)
+      else return []
+    }
+    const { data, error } = await query
     if (error) throw error
     return data
   },
@@ -311,8 +432,25 @@ export const mbApi = {
 // ── Users (Profiles) ─────────────────────────────────────────
 export const usersApi = {
   async list() {
-    const { data, error } = await supabase.from('profiles')
+    const role = _profile?.role
+    let query = supabase.from('profiles')
       .select('*, subdivisions(code,name)').eq('org_id', _orgId).order('name')
+    // SDO sees only their subdivision's users
+    if (role === 'sdo' && _profile?.subdivision_id) {
+      query = query.eq('subdivision_id', _profile.subdivision_id)
+    }
+    // EE sees their division's users
+    else if (role === 'ee' && _profile?.division_id) {
+      const { data: subs } = await supabase.from('subdivisions')
+        .select('id').eq('division_id', _profile.division_id)
+      const subIds = (subs||[]).map(s => s.id)
+      if (subIds.length) query = query.in('subdivision_id', subIds)
+    }
+    // JE/FI only see themselves
+    else if (['je','feeder_incharge'].includes(role)) {
+      query = query.eq('id', _profile.id)
+    }
+    const { data, error } = await query
     if (error) throw error
     return data
   },
@@ -386,12 +524,169 @@ export const groupsApi = {
 }
 
 // ── Config ───────────────────────────────────────────────────
+// ── Maintenance Proposal API ─────────────────────────────────
+export const maintenanceApi = {
+
+  async list() {
+    const feederIds = await getScopedFeederIds()
+    let query = supabase.from('maintenance_proposals')
+      .select(`*, feeders(code,name), subdivisions(code,name),
+        profiles!created_by_id(name,employee_id,role),
+        profiles!current_owner_id(name,employee_id,role),
+        ao_reviewed:profiles!ao_reviewed_by(name),
+        approved_by:profiles!approved_by_id(name)`)
+      .eq('org_id', _orgId)
+      .order('created_at', { ascending: false })
+    if (feederIds !== null) {
+      if (feederIds.length === 0) return []
+      query = query.in('feeder_id', feederIds)
+    }
+    const { data, error } = await query
+    if (error) throw error
+    return data || []
+  },
+
+  async get(id) {
+    const { data: proposal, error } = await supabase.from('maintenance_proposals')
+      .select(`*, feeders(code,name), subdivisions(code,name),
+        profiles!created_by_id(name,employee_id,role),
+        approved_by:profiles!approved_by_id(name)`)
+      .eq('id', id).single()
+    if (error) throw error
+    const { data: items } = await supabase.from('maintenance_items')
+      .select('*, profiles!tagged_by_id(name,employee_id)')
+      .eq('proposal_id', id).order('seq_number')
+    return { ...proposal, items: items || [] }
+  },
+
+  async generateNumber(feederId, subdivisionId) {
+    const year = new Date().getFullYear()
+    const seq = await supabase.rpc('next_counter', { p_org_id: _orgId, p_name: 'proposal' })
+    const { data: feeder } = await supabase.from('feeders').select('code').eq('id', feederId).single()
+    const { data: sd } = await supabase.from('subdivisions').select('code').eq('id', subdivisionId).single()
+    const num = String(seq.data).padStart(4,'0')
+    return `${feeder?.code||'F'}/${sd?.code||'SD'}/${year}/${num}`
+  },
+
+  async create({ feederId, subdivisionId, title, description, priority, createdById }) {
+    const proposal_number = await maintenanceApi.generateNumber(feederId, subdivisionId)
+    const { data, error } = await supabase.from('maintenance_proposals')
+      .insert({
+        org_id: _orgId,
+        proposal_number,
+        feeder_id: feederId,
+        subdivision_id: subdivisionId,
+        title, description,
+        priority: priority || 'normal',
+        status: 'draft',
+        created_by_id: createdById,
+        current_owner_id: createdById,
+        ao_budget_status: 'pending',
+      }).select().single()
+    if (error) throw error
+    return data
+  },
+
+  async addItem(proposalId, item) {
+    const { data: existing } = await supabase.from('maintenance_items')
+      .select('seq_number').eq('proposal_id', proposalId)
+      .order('seq_number', { ascending: false }).limit(1)
+    const seq = (existing?.[0]?.seq_number || 0) + 1
+    const { data, error } = await supabase.from('maintenance_items')
+      .insert({ ...item, org_id: _orgId, proposal_id: proposalId, seq_number: seq })
+      .select().single()
+    if (error) throw error
+    // Flag the asset
+    if (item.asset_id) {
+      await supabase.from('assets').update({ status: 'flag', flag_note: item.issue_type }).eq('id', item.asset_id)
+    }
+    return data
+  },
+
+  async removeItem(itemId) {
+    const { data: item } = await supabase.from('maintenance_items').select('asset_id').eq('id', itemId).single()
+    const { error } = await supabase.from('maintenance_items').delete().eq('id', itemId)
+    if (error) throw error
+    return item
+  },
+
+  // Stage transitions
+  async advance(id, nextStatus, remarks, userId) {
+    const now = new Date().toISOString()
+    const updates = {
+      status: nextStatus,
+      current_owner_id: userId,
+      updated_at: now,
+    }
+    // Record stage remarks and timestamps
+    const statusMap = {
+      je_review:  { fi_remarks: remarks, submitted_by_fi_at: now },
+      sdo_review: { je_remarks: remarks, submitted_by_je_at: now },
+      ee_review:  { sdo_remarks: remarks, submitted_by_sdo_at: now },
+      se_review:  { ee_remarks: remarks, submitted_by_ee_at: now },
+      approved:   { se_remarks: remarks, approved_at: now, approved_by_id: userId },
+      hold:       { se_remarks: remarks },
+    }
+    Object.assign(updates, statusMap[nextStatus] || {})
+    const { data, error } = await supabase.from('maintenance_proposals')
+      .update(updates).eq('id', id).select().single()
+    if (error) throw error
+    return data
+  },
+
+  async reject(id, toStatus, reason, userId) {
+    const { data, error } = await supabase.from('maintenance_proposals')
+      .update({
+        status: toStatus,  // send back to previous stage status
+        rejected_at_stage: toStatus,
+        rejection_reason: reason,
+        rejected_by_id: userId,
+        current_owner_id: userId,
+        updated_at: new Date().toISOString(),
+      }).eq('id', id).select().single()
+    if (error) throw error
+    return data
+  },
+
+  async aoReview(id, budgetStatus, note, userId) {
+    // AO adds budget note — NOT a terminal action, proposal continues
+    const { data, error } = await supabase.from('maintenance_proposals')
+      .update({
+        ao_budget_status: budgetStatus,
+        ao_budget_note: note,
+        ao_reviewed_by: userId,
+        ao_reviewed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }).eq('id', id).select().single()
+    if (error) throw error
+    return data
+  },
+
+  async jeVerifyItem(itemId, verified, note) {
+    const { data, error } = await supabase.from('maintenance_items')
+      .update({ je_verified: verified, je_note: note, removed_by_je: !verified })
+      .eq('id', itemId).select().single()
+    if (error) throw error
+    return data
+  },
+}
+
 // ── Patrol Reports API ───────────────────────────────────────
 export const patrolApi = {
   async listReports() {
-    const { data, error } = await supabase.from('patrol_reports')
+    const feederIds = await getScopedFeederIds()
+    let query = supabase.from('patrol_reports')
       .select('*, feeders(code,name), profiles!patrolled_by_id(name,employee_id)')
       .eq('org_id', _orgId).order('created_at', { ascending: false })
+    if (feederIds !== null) {
+      if (feederIds.length === 0) return []
+      query = query.in('feeder_id', feederIds)
+    }
+    // FI only sees their own patrols
+    if (_profile?.role === 'feeder_incharge') {
+      query = query.eq('patrolled_by_id', _profile.id)
+    }
+    const { data, error } = await query
     if (error) throw error
     return data || []
   },

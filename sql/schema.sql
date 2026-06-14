@@ -412,3 +412,86 @@ GRANT EXECUTE ON FUNCTION exec_readonly_sql      TO authenticated;
 GRANT EXECUTE ON FUNCTION get_nearby_shutdowns   TO anon;
 GRANT EXECUTE ON FUNCTION get_nearby_shutdowns   TO authenticated;
 ALTER PUBLICATION supabase_realtime ADD TABLE shutdowns;
+
+-- ── Asset Maintenance Proposals ───────────────────────────────
+-- Replaces work_orders + measurement_books
+-- Number format: FeederCode/SDCode/YYYY/NNNN
+
+CREATE TABLE maintenance_proposals (
+  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  org_id          UUID REFERENCES organisations(id) ON DELETE CASCADE,
+  proposal_number TEXT UNIQUE NOT NULL,
+  feeder_id       UUID REFERENCES feeders(id),
+  subdivision_id  UUID REFERENCES subdivisions(id),
+  title           TEXT NOT NULL,
+  description     TEXT,
+  status          TEXT DEFAULT 'draft' CHECK (status IN (
+    'draft','je_review','sdo_review','ee_review','se_review','approved','rejected','hold'
+  )),
+  priority        TEXT DEFAULT 'normal' CHECK (priority IN ('urgent','high','normal','low')),
+
+  -- Who created and current owner
+  created_by_id   UUID REFERENCES profiles(id),
+  current_owner_id UUID REFERENCES profiles(id),
+
+  -- Stage-wise remarks
+  fi_remarks      TEXT,
+  je_remarks      TEXT,
+  sdo_remarks     TEXT,
+  ee_remarks      TEXT,
+  se_remarks      TEXT,
+  ao_budget_note  TEXT,
+  ao_budget_status TEXT CHECK (ao_budget_status IN ('pending','provisionally_approved','refused')),
+  -- Note: AO refusal is NOT terminal — proposal can be held and resubmitted later
+  -- SE can approve even with AO refusal (overrides) or put proposal on hold
+  ao_reviewed_by  UUID REFERENCES profiles(id),
+  ao_reviewed_at  TIMESTAMPTZ,
+
+  -- Rejection tracking
+  rejected_at_stage TEXT,
+  rejection_reason  TEXT,
+  rejected_by_id    UUID REFERENCES profiles(id),
+
+  -- Timestamps per stage
+  submitted_by_fi_at  TIMESTAMPTZ,
+  submitted_by_je_at  TIMESTAMPTZ,
+  submitted_by_sdo_at TIMESTAMPTZ,
+  submitted_by_ee_at  TIMESTAMPTZ,
+  approved_at         TIMESTAMPTZ,
+  approved_by_id      UUID REFERENCES profiles(id),
+
+  created_at      TIMESTAMPTZ DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE maintenance_items (
+  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  org_id          UUID REFERENCES organisations(id) ON DELETE CASCADE,
+  proposal_id     UUID REFERENCES maintenance_proposals(id) ON DELETE CASCADE,
+  asset_id        UUID REFERENCES assets(id) ON DELETE SET NULL,
+  asset_code      TEXT,
+  asset_type      TEXT,
+  asset_name      TEXT,
+  issue_type      TEXT NOT NULL,
+  issue_description TEXT,
+  severity        TEXT DEFAULT 'medium' CHECK (severity IN ('low','medium','high','critical')),
+  tagged_by_id    UUID REFERENCES profiles(id),
+  je_verified     BOOLEAN DEFAULT false,
+  je_note         TEXT,
+  removed_by_je   BOOLEAN DEFAULT false,
+  seq_number      INTEGER,
+  created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_mp_org    ON maintenance_proposals(org_id, status);
+CREATE INDEX idx_mp_feeder ON maintenance_proposals(feeder_id);
+CREATE INDEX idx_mi_proposal ON maintenance_items(proposal_id);
+
+ALTER TABLE maintenance_proposals ENABLE ROW LEVEL SECURITY;
+ALTER TABLE maintenance_items     ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "org_rw" ON maintenance_proposals FOR ALL USING (org_id = my_org_id());
+CREATE POLICY "org_rw" ON maintenance_items     FOR ALL USING (org_id = my_org_id());
+
+-- Counter for proposal numbering
+-- Uses existing next_counter with name 'proposal'

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { usePersistentSession } from '../hooks/usePersistentState.js'
 import { useAssetStore, useFeederStore, useAuthStore, useUIStore } from '../store/index.js'
-import { patrolApi, auditApi, nearbyApi } from '../api/client.js'
+import { patrolApi, auditApi, nearbyApi, maintenanceApi } from '../api/client.js'
 import { ASSET_TYPES } from '../utils/constants.js'
 
 const ISSUE_TYPES = {
@@ -105,6 +105,8 @@ export default function PatrolPage() {
   const mapRef = useRef(null)
   const lmapRef = useRef(null)
   const [viewingReport, setViewingReport] = useState(null)
+  const [creatingProposal, setCreatingProposal] = useState(false)
+  const [proposalCreated, setProposalCreated] = useState(null)
 
   // Filter feeders to FI's own feeders only
   const myFeeders = profile?.role === 'feeder_incharge'
@@ -238,7 +240,57 @@ export default function PatrolPage() {
       })
       toast(`✅ Patrol complete — ${issues} issues found`, 'ok')
       loadReports()
+      // If issues found, offer to create maintenance proposal
+      if (issues > 0) {
+        setProposalCreated(null)  // reset
+      }
     } catch(e) { toast(e.message, 'err') } finally { setSaving(false) }
+  }
+
+  async function createProposalFromPatrol(report, obs) {
+    const feeder = feeders.find(f => f.id === report.feeder_id)
+    if (!feeder?.subdivision_id) {
+      toast('Feeder has no sub-division — update feeder first', 'err')
+      return
+    }
+    setCreatingProposal(true)
+    try {
+      // Create proposal
+      const proposal = await maintenanceApi.create({
+        feederId: report.feeder_id,
+        subdivisionId: feeder.subdivision_id,
+        title: `Patrol Findings — ${report.report_number}`,
+        description: `Auto-generated from patrol report ${report.report_number}. Total issues: ${obs.length}`,
+        priority: obs.some(o=>o.severity==='critical') ? 'urgent'
+          : obs.some(o=>o.severity==='high') ? 'high' : 'normal',
+        createdById: profile?.id,
+      })
+
+      // Add each patrol observation as a maintenance item
+      for (const o of obs.filter(ob => ob.issue_type)) {
+        try {
+          await maintenanceApi.addItem(proposal.id, {
+            asset_id: o.asset_id || null,
+            asset_code: o.asset_code,
+            asset_type: o.asset_type,
+            asset_name: o.asset_name,
+            issue_type: o.issue_type,
+            issue_description: o.description || '',
+            severity: o.severity || 'medium',
+            tagged_by_id: profile?.id,
+          })
+        } catch(e) { console.warn('Item add error:', e.message) }
+      }
+
+      await auditApi.log({
+        action: 'MAINTENANCE_FROM_PATROL', category: 'asset', severity: 'info',
+        description: `Maintenance proposal ${proposal.proposal_number} created from patrol ${report.report_number}`,
+        meta: { proposal_id: proposal.id, patrol_id: report.id, items: obs.length },
+      })
+
+      setProposalCreated(proposal)
+      toast(`✅ ${proposal.proposal_number} created from patrol`, 'ok')
+    } catch(e) { toast(e.message, 'err') } finally { setCreatingProposal(false) }
   }
 
   async function generatePDF(report, obs) {
@@ -673,19 +725,41 @@ export default function PatrolPage() {
       <div className="text-6xl mb-4">✅</div>
       <div className="font-rajdhani font-bold text-2xl text-green-400 mb-2">Patrol Complete!</div>
       <div className="font-mono text-a mb-1">{activeReport?.report_number}</div>
-      <div className="text-mu text-sm mb-8">{observations.length} observations · {observations.filter(o=>o.severity==='critical').length} critical</div>
+      <div className="text-mu text-sm mb-4">{observations.length} observations · {observations.filter(o=>o.severity==='critical').length} critical</div>
+
+      {observations.length > 0 && !proposalCreated && (
+        <div className="w-full bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 mb-4">
+          <div className="font-rajdhani font-bold text-amber-400 mb-1">⚠️ {observations.length} Issues Found</div>
+          <div className="text-[11px] text-mu mb-3">Create a Maintenance Proposal to push through approval pipeline (FI → JE → SDO → EE → SE)?</div>
+          <button onClick={() => createProposalFromPatrol(activeReport, observations)}
+            disabled={creatingProposal}
+            className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-bg font-rajdhani font-bold disabled:opacity-50">
+            {creatingProposal ? '⏳ Creating…' : '🔧 Create Maintenance Proposal'}
+          </button>
+        </div>
+      )}
+
+      {proposalCreated && (
+        <div className="w-full bg-green-500/10 border border-green-500/30 rounded-2xl p-4 mb-4">
+          <div className="font-bold text-green-400 text-sm mb-1">✅ Maintenance Proposal Created</div>
+          <div className="font-mono text-a text-base">{proposalCreated.proposal_number}</div>
+          <div className="text-[10px] text-mu mt-1">Go to MAINT. tab → submit to JE for review</div>
+        </div>
+      )}
+
       <div className="w-full space-y-3">
         <button onClick={() => generatePDF(activeReport, observations)}
           className="w-full py-4 rounded-2xl bg-gradient-to-r from-a to-blue-500 text-bg font-rajdhani font-bold text-lg">
-          📄 Download PDF Report
+          📄 Download Patrol PDF
         </button>
-        <button onClick={() => { clearPatrol() }}
+        <button onClick={() => { clearPatrol(); setProposalCreated(null) }}
           className="w-full py-3 rounded-2xl border border-bd text-mu font-rajdhani font-bold">
           ← Back to Reports
         </button>
       </div>
     </div>
   )
+
 
   // ── VIEW REPORT MODE ────────────────────────────────────────
   if (mode === 'view' && viewingReport) return (

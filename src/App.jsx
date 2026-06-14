@@ -13,8 +13,8 @@ import MapPage from './pages/MapPage.jsx'
 import SurveyPage from './pages/SurveyPage.jsx'
 import { AssetsPage } from './pages/AssetsPage.jsx'
 import { FeedersPage } from './pages/FeedersPage.jsx'
-import WorkOrdersPage from './pages/WorkOrdersPage.jsx'
-import MeasurementBooksPage from './pages/MeasurementBooksPage.jsx'
+import MaintenancePage from './pages/MaintenancePage.jsx'
+// WorkOrdersPage and MeasurementBooksPage removed — replaced by MaintenancePage
 import UsersPage from './pages/UsersPage.jsx'
 import HierarchyPage from './pages/HierarchyPage.jsx'
 import AuditLogPage from './pages/AuditLogPage.jsx'
@@ -87,8 +87,7 @@ export default function App() {
                 <Route path="survey" element={<SurveyPage />} />
                 <Route path="assets" element={<AssetsPage />} />
                 <Route path="feeders"element={<FeedersPage />} />
-                <Route path="wo"     element={<WorkOrdersPage />} />
-                <Route path="mb"     element={<MeasurementBooksPage />} />
+                <Route path="maintenance" element={<MaintenancePage />} />
                 <Route path="users"     element={<UsersPage />} />
                 <Route path="hierarchy" element={<HierarchyPage />} />
                 <Route path="audit"     element={<AuditLogPage />} />
@@ -114,7 +113,7 @@ export default function App() {
                 <Route path="map"    element={<MobileMapPage />} />
                 <Route path="survey" element={<MobileSurveyPage />} />
                 <Route path="assets" element={<MobileAssetsPage />} />
-                <Route path="wo"       element={<MobileWOPage />} />
+                <Route path="maintenance" element={<MaintenancePage />} />
                 <Route path="shutdown" element={<ShutdownPage />} />
                 <Route path="patrol"    element={<PatrolPage />} />
                 <Route path="*"      element={<Navigate to="/m/map" replace />} />
