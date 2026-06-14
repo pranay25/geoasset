@@ -529,12 +529,10 @@ export const maintenanceApi = {
 
   async list() {
     const feederIds = await getScopedFeederIds()
+    // Supabase doesn't allow same table joined multiple times in one query
+    // Fetch proposals with minimal joins, then enrich separately
     let query = supabase.from('maintenance_proposals')
-      .select(`*, feeders(code,name), subdivisions(code,name),
-        profiles!created_by_id(name,employee_id,role),
-        profiles!current_owner_id(name,employee_id,role),
-        ao_reviewed:profiles!ao_reviewed_by(name),
-        approved_by:profiles!approved_by_id(name)`)
+      .select('*, feeders(code,name), subdivisions(code,name), profiles!created_by_id(name,employee_id,role)')
       .eq('org_id', _orgId)
       .order('created_at', { ascending: false })
     if (feederIds !== null) {
@@ -548,9 +546,7 @@ export const maintenanceApi = {
 
   async get(id) {
     const { data: proposal, error } = await supabase.from('maintenance_proposals')
-      .select(`*, feeders(code,name), subdivisions(code,name),
-        profiles!created_by_id(name,employee_id,role),
-        approved_by:profiles!approved_by_id(name)`)
+      .select('*, feeders(code,name), subdivisions(code,name), profiles!created_by_id(name,employee_id,role)')
       .eq('id', id).single()
     if (error) throw error
     const { data: items } = await supabase.from('maintenance_items')
