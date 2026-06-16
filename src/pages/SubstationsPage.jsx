@@ -4,7 +4,8 @@ import { substationsApi } from '../api/client.js'
 
 export default function SubstationsPage() {
   const { substations, fetch, add, update, remove } = useSubstationStore()
-  const { org } = useAuthStore()
+  const { org, profile } = useAuthStore()
+  const canManageInfra = ['admin','ee','se'].includes(profile?.role)
   const { toast } = useUIStore()
   const [form, setForm] = useState(null)
   const [saving, setSaving] = useState(false)
@@ -126,10 +127,12 @@ export default function SubstationsPage() {
           <div className="font-rajdhani font-bold text-sm text-tx">🏭 Sub-Stations</div>
           <div className="text-[10px] text-mu mt-0.5">{org?.circle} · {substations.length} substations</div>
         </div>
-        <button onClick={openNew}
-          className="px-3 py-2 rounded-xl bg-a/10 border border-a/30 text-a text-xs font-bold">
-          + New Substation
-        </button>
+        {canManageInfra && (
+          <button onClick={openNew}
+            className="px-3 py-2 rounded-xl bg-a/10 border border-a/30 text-a text-xs font-bold">
+            + New Substation
+          </button>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto p-3 space-y-3">
@@ -162,10 +165,12 @@ export default function SubstationsPage() {
                   </div>
                 </div>
                 <div className="flex gap-1 flex-shrink-0">
-                  <button onClick={() => openEdit(s)}
-                    className="w-8 h-8 rounded-lg border border-bd text-mu text-xs flex items-center justify-center hover:border-a hover:text-a">✏️</button>
-                  <button onClick={() => del(s)}
-                    className="w-8 h-8 rounded-lg border border-red-500/30 text-red-400 text-xs flex items-center justify-center">🗑</button>
+                  {canManageInfra && <>
+                    <button onClick={() => openEdit(s)}
+                      className="w-8 h-8 rounded-lg border border-bd text-mu text-xs flex items-center justify-center hover:border-a hover:text-a">✏️</button>
+                    <button onClick={() => del(s)}
+                      className="w-8 h-8 rounded-lg border border-red-500/30 text-red-400 text-xs flex items-center justify-center">🗑</button>
+                  </>}
                 </div>
               </div>
 
@@ -210,10 +215,12 @@ export default function SubstationsPage() {
               )}
 
               <div className="flex gap-2 mt-3">
-                <button onClick={() => startGPS(s.id)}
-                  className="flex-1 py-2 rounded-xl border border-a/30 bg-a/10 text-a text-xs font-bold">
-                  {s.latitude ? '📍 Re-Survey GPS' : '📍 Survey GPS Location'}
-                </button>
+                {canManageInfra && (
+                  <button onClick={() => startGPS(s.id)}
+                    className="flex-1 py-2 rounded-xl border border-a/30 bg-a/10 text-a text-xs font-bold">
+                    {s.latitude ? '📍 Re-Survey GPS' : '📍 Survey GPS Location'}
+                  </button>
+                )}
               </div>
               {s.latitude && s.longitude && (
                 <div className="mt-2 font-mono text-[10px] text-a/80 flex items-center gap-2">

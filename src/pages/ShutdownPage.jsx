@@ -17,7 +17,7 @@ export default function ShutdownPage() {
 
   // Form state
   const [form, setForm] = useState({
-    substation_id: '', feeder_id: '', shutdown_type: 'planned',
+    substation_id: '', selectedFeeders: [], shutdown_type: 'planned',
     reason: '', estimated_restore: '',
   })
 
@@ -50,7 +50,10 @@ export default function ShutdownPage() {
     if (!form.reason) return toast('Enter shutdown reason', 'err')
     setSaving(true)
     try {
-      const affected = form.feeder_id ? [form.feeder_id] : relatedFeeders.map(f => f.id)
+      // Use selected feeders if any chosen, otherwise all feeders on substation
+      const affected = form.selectedFeeders?.length > 0
+        ? form.selectedFeeders
+        : relatedFeeders.map(f => f.id)
           // Get substation record for GPS coords
       const substationRecord = substations.find(s => s.id === form.substation_id)
       const sd = await shutdownApi.create({
@@ -205,7 +208,7 @@ export default function ShutdownPage() {
         {displayed.map(sd => {
           const tc = TYPE_COLORS[sd.shutdown_type] || TYPE_COLORS.planned
           const affectedNames = (sd.affected_feeders||[])
-            .map(id => feeders.find(f=>f.id===id)?.code).filter(Boolean)
+            .map(id => { const f=feeders.find(x=>x.id===id); return f?{code:f.code,name:f.name}:null }).filter(Boolean)
           return (
             <div key={sd.id} className={`rounded-2xl border overflow-hidden
               ${sd.status==='active' ? 'border-red-500/40' : 'border-bd'}`}>
@@ -286,10 +289,11 @@ export default function ShutdownPage() {
                   <div className="mb-3">
                     <div className="text-[10px] text-mu mb-1.5">Affected Feeders ({affectedNames.length})</div>
                     <div className="flex flex-wrap gap-1.5">
-                      {affectedNames.map(code => (
-                        <span key={code} className="text-[10px] font-mono font-bold px-2 py-1 rounded-lg border border-red-500/30 bg-red-500/10 text-red-400">
-                          ⚡ {code}
-                        </span>
+                      {affectedNames.map(({ code, name }) => (
+                        <div key={code} className="flex items-center gap-1.5 px-2 py-1 rounded-lg border border-red-500/30 bg-red-500/10">
+                          <span className="text-[10px] font-mono font-bold text-red-400">⚡ {code}</span>
+                          {name && <span className="text-[9px] text-mu">{name}</span>}
+                        </div>
                       ))}
                     </div>
                   </div>
@@ -338,7 +342,7 @@ export default function ShutdownPage() {
               <div>
                 <label className="text-[10px] text-mu block mb-1.5">Substation *</label>
                 <select className={inp} value={form.substation_id}
-                  onChange={e => setForm({...form, substation_id:e.target.value, feeder_id:''})}>
+                  onChange={e => setForm({...form, substation_id:e.target.value, selectedFeeders:[], feeder_id:''})}>
                   <option value="">Select substation…</option>
                   {substations.map(s => (
                     <option key={s.id} value={s.id}>{s.code} — {s.name} ({s.voltage_ratio})</option>
@@ -363,17 +367,49 @@ export default function ShutdownPage() {
                 </div>
               )}
 
-              {/* Specific feeder (optional) */}
-              <div>
-                <label className="text-[10px] text-mu block mb-1.5">Specific Feeder (optional)</label>
-                <select className={inp} value={form.feeder_id}
-                  onChange={e => setForm({...form, feeder_id:e.target.value})}>
-                  <option value="">All feeders on substation</option>
-                  {feederOptions.map(f => (
-                    <option key={f.id} value={f.id}>{f.code} — {f.name}</option>
-                  ))}
-                </select>
-              </div>
+              {/* Feeder selection — checkboxes */}
+              {form.substation_id && feederOptions.length > 0 && (
+                <div>
+                  <label className="text-[10px] text-mu block mb-1.5">Affected Feeders</label>
+                  <div className="bg-bg border border-bd rounded-xl p-3 space-y-2">
+                    {/* Select All checkbox */}
+                    <label className="flex items-center gap-3 cursor-pointer pb-2 border-b border-bd">
+                      <input type="checkbox"
+                        checked={form.selectedFeeders?.length === feederOptions.length}
+                        onChange={e => setForm({...form,
+                          selectedFeeders: e.target.checked ? feederOptions.map(f=>f.id) : []
+                        })}
+                        className="w-4 h-4 accent-red-500" />
+                      <span className="text-sm font-bold text-red-400">All Feeders ({feederOptions.length})</span>
+                    </label>
+                    {/* Individual feeders */}
+                    {feederOptions.map(f => (
+                      <label key={f.id} className="flex items-center gap-3 cursor-pointer">
+                        <input type="checkbox"
+                          checked={(form.selectedFeeders||[]).includes(f.id)}
+                          onChange={e => {
+                            const cur = form.selectedFeeders || []
+                            setForm({...form,
+                              selectedFeeders: e.target.checked
+                                ? [...cur, f.id]
+                                : cur.filter(id => id !== f.id)
+                            })
+                          }}
+                          className="w-4 h-4 accent-a" />
+                        <div>
+                          <span className="text-sm font-mono text-a">{f.code}</span>
+                          <span className="text-xs text-mu ml-2">{f.name}</span>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                  <div className="text-[10px] text-mu mt-1">
+                    {(form.selectedFeeders||[]).length === 0
+                      ? '⚠️ No feeders selected — alert will go to all feeders on this substation'
+                      : `✅ Alert will go to ${form.selectedFeeders.length} selected feeder(s)`}
+                  </div>
+                </div>
+              )}
 
               {/* Type */}
               <div>

@@ -7,6 +7,17 @@ export const ASSET_TYPES = {
   pillar:      { label: 'Feeder Pillar',  icon: '🔐', color: '#a855f7', bg: 'rgba(168,85,247,0.15)'  },
   iso:         { label: 'Isolator',       icon: '🔴', color: '#f43f5e', bg: 'rgba(244,63,94,0.15)'   },
   linedp:      { label: 'Line DP',         icon: '🔀', color: '#84cc16', bg: 'rgba(132,204,22,0.15)'   },
+  stay_11kv:   { label: 'Stay Set 11kV',   icon: '⚓', color: '#64748b', bg: 'rgba(100,116,139,0.15)'  },
+  stay_33kv:   { label: 'Stay Set 33kV',   icon: '⚓', color: '#475569', bg: 'rgba(71,85,105,0.15)'    },
+  lattice_36:  { label: 'Lattice 36ft',    icon: '🗼', color: '#7c3aed', bg: 'rgba(124,58,237,0.15)'  },
+  lattice_42:  { label: 'Lattice 42ft',    icon: '🗼', color: '#6d28d9', bg: 'rgba(109,40,217,0.15)'  },
+  ab_cable:    { label: 'AB Cable',        icon: '🔗', color: '#0ea5e9', bg: 'rgba(14,165,233,0.15)'  },
+  rmu:         { label: 'Ring Main Unit',  icon: '🔁', color: '#e11d48', bg: 'rgba(225,29,72,0.15)'   },
+  cap_bank:    { label: 'Capacitor Bank',  icon: '⚡', color: '#d97706', bg: 'rgba(217,119,6,0.15)'   },
+  la:          { label: 'Lightning Arr.',  icon: '⛈️', color: '#0891b2', bg: 'rgba(8,145,178,0.15)'   },
+  streetlight: { label: 'Street Light',   icon: '💡', color: '#fbbf24', bg: 'rgba(251,191,36,0.15)'   },
+  service_conn:{ label: 'Service Conn.',  icon: '🔌', color: '#34d399', bg: 'rgba(52,211,153,0.15)'   },
+  dtr_sp:      { label: 'DTR Single Phase', icon: '🔆', color: '#fb923c', bg: 'rgba(251,146,60,0.15)'   },
 }
 
 export const ROLES = {

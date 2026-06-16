@@ -29,6 +29,14 @@ const ISSUE_TYPES = {
   meter:  ['Meter Bypass','Meter Broken','No Display','Other'],
   pillar: ['Door Missing','Fuse Blown','Other'],
   linedp: ['Physical Damage','Loose Connection','Other'],
+  stay_11kv: ['Stay Wire Broken','Stay Wire Loose','Anchor Plate Failed','Rusted/Corroded','Other'],
+  stay_33kv: ['Stay Wire Broken','Stay Wire Loose','Anchor Plate Failed','Rusted/Corroded','Other'],
+  lattice_36: ['Corrosion/Rust','Bent Member','Missing Bolt/Nut','Painting Required','Other'],
+  lattice_42: ['Corrosion/Rust','Bent Member','Missing Bolt/Nut','Painting Required','Other'],
+  rmu: ['SF6 Pressure Low','Operation Failure','Busbar Fault','Other'],
+  la: ['Flashover Marks','Cracked/Broken','Disconnected','Other'],
+  streetlight: ['Lamp Not Working','Pole Damaged','Wiring Fault','Other'],
+  dtr_sp: ['DTR Burnt','DTR Failed','DTR Overloaded','Oil Leakage','Bushing Cracked','Other'],
   default:['Physical Damage','Maintenance Required','Replacement Required','Other'],
 }
 

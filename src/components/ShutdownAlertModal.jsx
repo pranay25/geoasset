@@ -21,9 +21,8 @@ export default function ShutdownAlertModal() {
       orgId,
       // onInsert — new shutdown posted
       (newShutdown) => {
-        if (!isAcked(newShutdown)) {
+        if (!isAcked(newShutdown) && isRelevant(newShutdown)) {
           setAlerts(prev => {
-            // Avoid duplicates
             if (prev.find(a => a.id === newShutdown.id)) return prev
             return [...prev, newShutdown]
           })
@@ -48,14 +47,40 @@ export default function ShutdownAlertModal() {
   async function loadActive() {
     try {
       const active = await shutdownApi.listActive()
-      const unacked = active.filter(sd => !isAcked(sd))
-      setAlerts(unacked)
+      const relevant = active.filter(sd => !isAcked(sd) && isRelevant(sd))
+      setAlerts(relevant)
     } catch(e) { console.warn('Load active shutdowns:', e) }
   }
 
   function isAcked(sd) {
     return (sd.acknowledged_by || []).includes(profile?.id)
   }
+
+  // Only show shutdown if relevant to this user's scope
+  function isRelevant(sd) {
+    if (!profile) return false
+    const role = profile.role
+    // Circle/division level — see all shutdowns in org
+    if (['admin','se','ee','ao'].includes(role)) return true
+    // SDO — sees shutdowns where their subdivision is involved
+    // substation.subdivision_id must match profile.subdivision_id
+    // We use sd.substation_id indirectly — if feeder belongs to their subdivision
+    if (role === 'sdo' && profile.subdivision_id) {
+      // affected_feeders contains feeder IDs — SDO's feeders are in their subdivision
+      // For now show if any feeder in affected_feeders OR substation matches
+      return true // SDO gets all — further filtered by RLS org_id
+    }
+    // JE — only their substation
+    if (role === 'je' && profile.substation_id) {
+      return sd.substation_id === profile.substation_id
+    }
+    // FI — only if their specific feeder is affected
+    if (role === 'feeder_incharge' && profile.feeder_id) {
+      return (sd.affected_feeders || []).includes(profile.feeder_id)
+    }
+    return false
+  }
+
 
   async function acknowledge(sd) {
     try {
@@ -73,7 +98,10 @@ export default function ShutdownAlertModal() {
 
   const isRestored = alert.status === 'restored' || alert._justRestored
   const affectedCodes = (alert.affected_feeders || [])
-    .map(id => feeders.find(f => f.id === id)?.code).filter(Boolean)
+    .map(id => {
+      const f = feeders.find(f => f.id === id)
+      return f ? { code: f.code, name: f.name } : null
+    }).filter(Boolean)
 
   function fmtTime(ts) {
     if (!ts) return '—'
@@ -163,16 +191,19 @@ export default function ShutdownAlertModal() {
                   {isRestored ? '✅ Restored Feeders' : '⚡ Affected Feeders'} ({affectedCodes.length})
                 </div>
                 <div className="flex flex-wrap gap-1.5">
-                  {affectedCodes.map(code => (
-                    <span key={code}
-                      className="text-xs font-mono font-bold px-2.5 py-1 rounded-lg border"
+                  {affectedCodes.map(({ code, name }) => (
+                    <div key={code}
+                      className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg border"
                       style={{
                         background: isRestored ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)',
                         borderColor: isRestored ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)',
-                        color: isRestored ? '#4ade80' : '#f87171',
                       }}>
-                      ⚡ {code}
-                    </span>
+                      <span className="text-xs font-mono font-bold"
+                        style={{ color: isRestored ? '#4ade80' : '#f87171' }}>
+                        ⚡ {code}
+                      </span>
+                      {name && <span className="text-[10px] text-mu">— {name}</span>}
+                    </div>
                   ))}
                 </div>
               </div>

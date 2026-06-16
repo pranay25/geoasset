@@ -116,7 +116,9 @@ CREATE TABLE assets (
   feeder_id          UUID REFERENCES feeders(id),
   asset_code         TEXT,
   asset_type         TEXT NOT NULL CHECK (asset_type IN
-    ('pole','dtr','meter','line','pillar','iso','linedp')),
+    ('pole','dtr','meter','line','pillar','iso','linedp',
+     'stay_11kv','stay_33kv','lattice_36','lattice_42',
+     'ab_cable','rmu','cap_bank','la','streetlight','service_conn','dtr_sp')),
   name               TEXT NOT NULL,
   latitude           DECIMAL(10,6) NOT NULL,
   longitude          DECIMAL(10,6) NOT NULL,
@@ -495,3 +497,15 @@ CREATE POLICY "org_rw" ON maintenance_items     FOR ALL USING (org_id = my_org_i
 
 -- Counter for proposal numbering
 -- Uses existing next_counter with name 'proposal'
+
+-- ── New asset types migration (run if upgrading existing database) ──
+DO $$ BEGIN
+  ALTER TABLE assets DROP CONSTRAINT IF EXISTS assets_asset_type_check;
+  ALTER TABLE assets ADD CONSTRAINT assets_asset_type_check
+    CHECK (asset_type IN (
+      'pole','dtr','meter','line','pillar','iso','linedp',
+      'stay_11kv','stay_33kv','lattice_36','lattice_42',
+      'ab_cable','rmu','cap_bank','la','streetlight','service_conn'
+    ));
+EXCEPTION WHEN others THEN NULL;
+END $$;

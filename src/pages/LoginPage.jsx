@@ -90,6 +90,14 @@ export default function LoginPage() {
           <a href="/outages" className="text-[10px] text-amber-400/70 hover:text-amber-400 underline transition-colors block">
             ⚡ View Power Outages in my area (no login)
           </a>
+          <div className="pt-4 border-t border-bd/30 mt-2">
+            <div className="text-[9px] text-mu/50 text-center">
+              Designed & Developed by
+            </div>
+            <div className="text-[10px] font-mono font-bold text-center mt-0.5" style={{color:'#00d4ff88'}}>
+              engr_pr@nay#purohit
+            </div>
+          </div>
         </div>
       </div>
     </div>

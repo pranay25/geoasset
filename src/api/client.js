@@ -210,7 +210,7 @@ export const assetsApi = {
   },
   async create(payload) {
     const seq = await supabase.rpc('next_counter', { p_org_id: _orgId, p_name: 'asset' })
-    const prefix = { pole:'P', dtr:'D', meter:'M', line:'L', pillar:'FP', iso:'I' }[payload.asset_type] || 'A'
+    const prefix = { pole:'P', dtr:'D', meter:'M', line:'L', pillar:'FP', iso:'I', linedp:'LD', stay_11kv:'S1', stay_33kv:'S3', lattice_36:'LT', lattice_42:'LT', ab_cable:'AB', rmu:'RM', cap_bank:'CB', la:'LA', streetlight:'SL', service_conn:'SC', dtr_sp:'DS' }[payload.asset_type] || 'A'
     const asset_code = `${prefix}-${String(seq.data).padStart(4,'0')}`
     const { data, error } = await supabase.from('assets')
       .insert({ ...payload, org_id: _orgId, asset_code })

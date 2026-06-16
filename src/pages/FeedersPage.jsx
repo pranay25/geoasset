@@ -7,7 +7,8 @@ export function FeedersPage() {
   const { feeders, fetch, add, update, remove } = useFeederStore()
   const { substations, fetch: fetchSubstations } = useSubstationStore()
   const { assets } = useAssetStore()
-  const { org, canManageUsers } = useAuthStore()
+  const { org, profile, canManageUsers } = useAuthStore()
+  const canManageInfra = ['admin','ee','se'].includes(profile?.role)
   const { toast } = useUIStore()
   const [form, setForm] = useState(null)
   const [subdivisions, setSubdivisions] = useState([])
@@ -56,7 +57,7 @@ export function FeedersPage() {
     <div className="h-full flex flex-col">
       <div className="p-3 pb-2 flex-shrink-0 flex items-center justify-between">
         <div className="font-rajdhani font-bold text-sm text-tx">Feeders</div>
-        <button onClick={openNew} className="px-3 py-2 rounded-xl bg-a/10 border border-a/30 text-a text-xs font-bold">+ New</button>
+        {canManageInfra && <button onClick={openNew} className="px-3 py-2 rounded-xl bg-a/10 border border-a/30 text-a text-xs font-bold">+ New</button>}
       </div>
 
       <div className="flex-1 overflow-y-auto px-3 pb-3">
@@ -77,8 +78,8 @@ export function FeedersPage() {
                   </div>
                 </div>
                 <div className="flex gap-1">
-                  <button onClick={()=>openEdit(f)} className="px-2 py-1.5 rounded-lg border border-bd text-mu text-[10px]">✏️</button>
-                  <button onClick={()=>del(f)} className="px-2 py-1.5 rounded-lg border border-red-500/30 text-red-400 text-[10px]">🗑</button>
+                  {canManageInfra && <button onClick={()=>openEdit(f)} className="px-2 py-1.5 rounded-lg border border-bd text-mu text-[10px]">✏️</button>}
+                  {canManageInfra && <button onClick={()=>del(f)} className="px-2 py-1.5 rounded-lg border border-red-500/30 text-red-400 text-[10px]">🗑</button>}
                 </div>
               </div>
               {dtrs.length>0 && (
