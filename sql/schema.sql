@@ -509,3 +509,50 @@ DO $$ BEGIN
     ));
 EXCEPTION WHEN others THEN NULL;
 END $$;
+
+-- ── Travel Allowance (TA) Journey Tracker ─────────────────────
+CREATE TABLE IF NOT EXISTS ta_journeys (
+  id                UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  org_id            UUID REFERENCES organisations(id) ON DELETE CASCADE,
+  journey_number    TEXT UNIQUE NOT NULL,
+  user_id           UUID REFERENCES profiles(id),
+  substation_id     UUID REFERENCES substations(id),
+  substation_name   TEXT,
+  substation_lat    DECIMAL(10,6),
+  substation_lng    DECIMAL(10,6),
+  purpose           TEXT NOT NULL,
+  journey_date      DATE DEFAULT CURRENT_DATE,
+  status            TEXT DEFAULT 'active' CHECK (status IN ('active','completed')),
+  max_distance_km   DECIMAL(8,2) DEFAULT 0,
+  is_eligible       BOOLEAN DEFAULT false,
+  start_time        TIMESTAMPTZ DEFAULT NOW(),
+  end_time          TIMESTAMPTZ,
+  created_at        TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS ta_captures (
+  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  org_id          UUID REFERENCES organisations(id) ON DELETE CASCADE,
+  journey_id      UUID REFERENCES ta_journeys(id) ON DELETE CASCADE,
+  seq_number      INTEGER,
+  latitude        DECIMAL(10,6) NOT NULL,
+  longitude       DECIMAL(10,6) NOT NULL,
+  accuracy_m      DECIMAL(6,2),
+  distance_km     DECIMAL(8,2),
+  note            TEXT,
+  captured_at     TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_ta_journeys_org  ON ta_journeys(org_id, user_id);
+CREATE INDEX IF NOT EXISTS idx_ta_captures_journey ON ta_captures(journey_id);
+
+ALTER TABLE ta_journeys ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ta_captures ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "org_rw" ON ta_journeys;
+DROP POLICY IF EXISTS "org_rw" ON ta_captures;
+CREATE POLICY "org_rw" ON ta_journeys FOR ALL USING (org_id = my_org_id());
+CREATE POLICY "org_rw" ON ta_captures FOR ALL USING (org_id = my_org_id());
+
+GRANT ALL ON ta_journeys TO authenticated;
+GRANT ALL ON ta_captures TO authenticated;

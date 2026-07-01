@@ -344,6 +344,7 @@ export default function SQLEditorPage() {
   const [results, setResults] = useState(null)
   const [columns, setColumns] = useState([])
   const [running, setRunning] = useState(false)
+  const [showQueries, setShowQueries] = useState(false)
   const [error, setError] = useState(null)
   const [activeCategory, setActiveCategory] = useState('All')
   const [rowCount, setRowCount] = useState(0)
@@ -438,12 +439,18 @@ export default function SQLEditorPage() {
 
   return (
     <div className="h-full flex flex-col">
-      <div className="flex-1 overflow-hidden flex flex-col lg:flex-row">
+      <div className="flex-1 overflow-hidden flex flex-col">
 
-        {/* Left panel — saved queries */}
-        <div className="w-full lg:w-64 lg:flex-shrink-0 border-b lg:border-b-0 lg:border-r border-bd flex flex-col">
-          <div className="p-3 border-b border-bd flex-shrink-0">
-            <div className="font-rajdhani font-bold text-xs text-a tracking-wider mb-2">📋 SAVED QUERIES</div>
+        {/* Saved queries — collapsible on mobile */}
+        <div className="flex-shrink-0 border-b border-bd">
+          <div className="p-3">
+            <div className="flex items-center justify-between mb-2">
+              <div className="font-rajdhani font-bold text-xs text-a tracking-wider">📋 SAVED QUERIES</div>
+              <button onClick={() => setShowQueries(s=>!s)}
+                className="text-[10px] text-mu border border-bd px-2 py-1 rounded-lg">
+                {showQueries ? '▲ Hide' : '▼ Show'}
+              </button>
+            </div>
             <div className="flex gap-1 flex-wrap">
               <button onClick={() => setActiveCategory('All')}
                 className={`text-[9px] font-bold px-2 py-1 rounded-lg border transition-colors
@@ -459,50 +466,49 @@ export default function SQLEditorPage() {
               ))}
             </div>
           </div>
-          <div className="flex-1 overflow-y-auto p-2 space-y-1">
-            {filteredQueries.map((q, i) => (
-              <button key={i} onClick={() => loadQuery(q)}
-                className={`w-full text-left px-3 py-2.5 rounded-xl border transition-colors hover:border-a/50 hover:bg-sf2
-                  ${sql === q.sql ? 'border-a bg-a/10' : 'border-bd bg-sf'}`}>
-                <div className="text-xs font-semibold text-tx leading-tight">{q.label}</div>
-                <div className="text-[9px] text-mu mt-0.5">{q.description}</div>
-                <div className="text-[8px] font-bold mt-1 px-1.5 py-0.5 rounded inline-block"
-                  style={{ background:'rgba(0,212,255,0.1)', color:'#00d4ff' }}>
-                  {q.category}
-                </div>
-              </button>
-            ))}
-          </div>
+          {showQueries && (
+            <div className="max-h-48 overflow-y-auto px-2 pb-2 space-y-1">
+              {filteredQueries.map((q, i) => (
+                <button key={i} onClick={() => { loadQuery(q); setShowQueries(false) }}
+                  className={`w-full text-left px-3 py-2 rounded-xl border transition-colors
+                    ${sql === q.sql ? 'border-a bg-a/10' : 'border-bd bg-sf'}`}>
+                  <div className="text-xs font-semibold text-tx leading-tight">{q.label}</div>
+                  <div className="text-[9px] text-mu mt-0.5">{q.description}</div>
+                  <span className="text-[8px] font-bold mt-1 px-1.5 py-0.5 rounded inline-block"
+                    style={{ background:'rgba(0,212,255,0.1)', color:'#00d4ff' }}>
+                    {q.category}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
-        {/* Right panel — editor + results */}
-        <div className="flex-1 flex flex-col overflow-hidden">
-
-          {/* SQL Editor */}
-          <div className="p-3 border-b border-bd flex-shrink-0">
-            <div className="flex items-center justify-between mb-2">
-              <div className="font-rajdhani font-bold text-xs text-a tracking-wider">🔍 SQL EDITOR</div>
-              <div className="text-[9px] text-mu">SELECT queries only · Read-only</div>
-            </div>
-            <textarea
-              ref={textareaRef}
-              value={sql}
-              onChange={e => setSql(e.target.value)}
-              onKeyDown={e => { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); runQuery() } }}
-              className="w-full bg-bg border border-bd rounded-xl px-3 py-3 text-xs font-mono text-tx focus:outline-none focus:border-a resize-none leading-relaxed"
-              rows={8}
-              placeholder="SELECT * FROM assets LIMIT 10;&#10;&#10;Ctrl+Enter to run" />
-            <div className="flex gap-2 mt-2">
-              <button onClick={runQuery} disabled={running}
-                className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-a to-blue-500 text-bg font-rajdhani font-bold text-sm disabled:opacity-50">
-                {running ? '⏳ Running…' : '▶ Run Query (Ctrl+Enter)'}
-              </button>
-              <button onClick={() => { setSql(''); setResults(null); setError(null) }}
-                className="px-4 py-2.5 rounded-xl border border-bd text-mu text-xs font-bold">
-                Clear
-              </button>
-            </div>
+        {/* SQL Editor — always visible */}
+        <div className="p-3 border-b border-bd flex-shrink-0">
+          <div className="flex items-center justify-between mb-2">
+            <div className="font-rajdhani font-bold text-xs text-a tracking-wider">🔍 SQL EDITOR</div>
+            <div className="text-[9px] text-mu">SELECT only · Read-only</div>
           </div>
+          <textarea
+            ref={textareaRef}
+            value={sql}
+            onChange={e => setSql(e.target.value)}
+            onKeyDown={e => { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); runQuery() } }}
+            className="w-full bg-bg border border-bd rounded-xl px-3 py-3 text-xs font-mono text-tx focus:outline-none focus:border-a resize-none leading-relaxed"
+            rows={5}
+            placeholder="SELECT * FROM assets LIMIT 10;" />
+          {/* Run button ALWAYS visible */}
+          <div className="flex gap-2 mt-2">
+            <button onClick={runQuery} disabled={running}
+              className="flex-1 py-3 rounded-xl bg-gradient-to-r from-a to-blue-500 text-bg font-rajdhani font-bold text-sm disabled:opacity-50">
+              {running ? '⏳ Running…' : '▶ Run Query'}
+            </button>
+            <button onClick={() => { setSql(''); setResults(null); setError(null) }}
+              className="px-4 py-3 rounded-xl border border-bd text-mu text-xs font-bold">
+              Clear
+            </button>
+        </div>
 
           {/* Results */}
           <div className="flex-1 overflow-hidden flex flex-col">

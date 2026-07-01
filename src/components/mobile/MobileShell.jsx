@@ -7,6 +7,7 @@ const TABS = [
   { path: '/m/survey', icon: '📡', label: 'SURVEY' },
   { path: '/m/assets', icon: '🏗️', label: 'ASSETS' },
   { path: '/m/maintenance', icon: '🔧', label: 'MAINT.' },
+  { path: '/m/ta', icon: '🚗', label: 'TA' },
   { path: '/m/shutdown',icon: '⚡', label: 'SHUTDOWN' },
   { path: '/m/patrol',   icon: '🚶', label: 'PATROL'   },
 ]

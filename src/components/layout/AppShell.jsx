@@ -9,6 +9,7 @@ const TABS = [
   { path: '/d/feeders',      icon: '⚡',  label: 'FEEDERS'     },
   { path: '/d/substations', icon: '🏭', label: 'SUBSTATIONS' },
   { path: '/d/maintenance', icon: '🔧', label: 'MAINTENANCE' },
+  { path: '/d/ta', icon: '🚗', label: 'TA' },
   { path: '/d/export',    icon: '📤',  label: 'EXPORT'   },
   { path: '/d/shutdown',  icon: '⚡',  label: 'SHUTDOWN' },
   { path: '/d/patrol',    icon: '🚶', label: 'PATROL'   },

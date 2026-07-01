@@ -14,6 +14,7 @@ import SurveyPage from './pages/SurveyPage.jsx'
 import { AssetsPage } from './pages/AssetsPage.jsx'
 import { FeedersPage } from './pages/FeedersPage.jsx'
 import MaintenancePage from './pages/MaintenancePage.jsx'
+import TravelAllowancePage from './pages/TravelAllowancePage.jsx'
 // WorkOrdersPage and MeasurementBooksPage removed — replaced by MaintenancePage
 import UsersPage from './pages/UsersPage.jsx'
 import HierarchyPage from './pages/HierarchyPage.jsx'
@@ -88,6 +89,7 @@ export default function App() {
                 <Route path="assets" element={<AssetsPage />} />
                 <Route path="feeders"element={<FeedersPage />} />
                 <Route path="maintenance" element={<MaintenancePage />} />
+                <Route path="ta" element={<TravelAllowancePage />} />
                 <Route path="users"     element={<UsersPage />} />
                 <Route path="hierarchy" element={<HierarchyPage />} />
                 <Route path="audit"     element={<AuditLogPage />} />
@@ -114,6 +116,7 @@ export default function App() {
                 <Route path="survey" element={<MobileSurveyPage />} />
                 <Route path="assets" element={<MobileAssetsPage />} />
                 <Route path="maintenance" element={<MaintenancePage />} />
+                <Route path="ta" element={<TravelAllowancePage />} />
                 <Route path="shutdown" element={<ShutdownPage />} />
                 <Route path="patrol"    element={<PatrolPage />} />
                 <Route path="*"      element={<Navigate to="/m/map" replace />} />

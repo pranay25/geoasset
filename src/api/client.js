@@ -981,3 +981,96 @@ export const configApi = {
     } catch { return false }
   },
 }
+
+// ── Travel Allowance (TA) Journey Tracker ─────────────────────
+function haversineKm(lat1, lng1, lat2, lng2) {
+  const R = 6371
+  const toR = d => d * Math.PI / 180
+  const dLat = toR(lat2 - lat1)
+  const dLng = toR(lng2 - lng1)
+  const a = Math.sin(dLat/2)**2 + Math.cos(toR(lat1))*Math.cos(toR(lat2))*Math.sin(dLng/2)**2
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
+}
+
+export const taApi = {
+  haversineKm,
+
+  async listJourneys(userId) {
+    let query = supabase.from('ta_journeys')
+      .select('*, substations(name,code), profiles!user_id(name,employee_id,role)')
+      .eq('org_id', _orgId)
+      .order('created_at', { ascending: false })
+    // Non-admin users see only their own journeys
+    if (userId && !['admin','se','ee','ao'].includes(_profile?.role)) {
+      query = query.eq('user_id', userId)
+    }
+    const { data, error } = await query
+    if (error) throw error
+    return data || []
+  },
+
+  async getJourney(id) {
+    const { data: journey, error } = await supabase.from('ta_journeys')
+      .select('*, substations(name,code), profiles!user_id(name,employee_id,role)')
+      .eq('id', id).single()
+    if (error) throw error
+    const { data: captures } = await supabase.from('ta_captures')
+      .select('*').eq('journey_id', id).order('seq_number')
+    return { ...journey, captures: captures || [] }
+  },
+
+  async generateNumber() {
+    const seq = await supabase.rpc('next_counter', { p_org_id: _orgId, p_name: 'ta_journey' })
+    const year = new Date().getFullYear()
+    return `TA-${year}-${String(seq.data).padStart(4,'0')}`
+  },
+
+  async startJourney({ userId, substationId, substationName, substationLat, substationLng, purpose }) {
+    const journey_number = await taApi.generateNumber()
+    const { data, error } = await supabase.from('ta_journeys')
+      .insert({
+        org_id: _orgId, journey_number,
+        user_id: userId, substation_id: substationId || null,
+        substation_name: substationName, substation_lat: substationLat, substation_lng: substationLng,
+        purpose, status: 'active',
+      }).select().single()
+    if (error) throw error
+    return data
+  },
+
+  async addCapture(journeyId, { lat, lng, acc, note }, substationLat, substationLng) {
+    // Get current capture count for seq_number
+    const { data: existing } = await supabase.from('ta_captures')
+      .select('seq_number').eq('journey_id', journeyId)
+      .order('seq_number', { ascending: false }).limit(1)
+    const seq = (existing?.[0]?.seq_number || 0) + 1
+    const distance_km = (substationLat != null && substationLng != null)
+      ? Math.round(haversineKm(substationLat, substationLng, lat, lng) * 100) / 100
+      : null
+    const { data, error } = await supabase.from('ta_captures')
+      .insert({
+        org_id: _orgId, journey_id: journeyId, seq_number: seq,
+        latitude: lat, longitude: lng, accuracy_m: acc,
+        distance_km, note: note || null,
+      }).select().single()
+    if (error) throw error
+    return data
+  },
+
+  async completeJourney(id, maxDistanceKm) {
+    const { data, error } = await supabase.from('ta_journeys')
+      .update({
+        status: 'completed',
+        end_time: new Date().toISOString(),
+        max_distance_km: maxDistanceKm,
+        is_eligible: maxDistanceKm >= 15,
+      }).eq('id', id).select().single()
+    if (error) throw error
+    return data
+  },
+
+  async deleteJourney(id) {
+    const { error } = await supabase.from('ta_journeys').delete().eq('id', id)
+    if (error) throw error
+  },
+}
